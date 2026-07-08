@@ -1,0 +1,55 @@
+openapi: 3.1.0
+info:
+  title: StepsTracker API
+  version: 1.0.0
+servers:
+  - url: https://steps.example.com/api/v1
+paths:
+  /auth/register:
+    post:
+      summary: Registra un account
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/Credentials'}}}}
+      responses: {'201': {description: Creato, content: {application/json: {schema: {$ref: '#/components/schemas/Tokens'}}}}}
+  /auth/login:
+    post:
+      summary: Avvia una sessione
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/Credentials'}}}}
+      responses: {'200': {description: Sessione, content: {application/json: {schema: {$ref: '#/components/schemas/Tokens'}}}}}
+  /auth/refresh:
+    post:
+      summary: Ruota il refresh token
+      responses: {'200': {description: Nuovi token}}
+  /auth/logout:
+    post:
+      summary: Revoca il refresh token
+      responses: {'204': {description: Revocato}}
+  /me:
+    get: {security: [{bearerAuth: []}], responses: {'200': {description: Utente corrente}}}
+    delete: {security: [{bearerAuth: []}], responses: {'204': {description: Account eliminato}}}
+  /me/profile:
+    put: {security: [{bearerAuth: []}], responses: {'200': {description: Profilo aggiornato}}}
+  /steps/batch:
+    post: {security: [{bearerAuth: []}], responses: {'200': {description: Esito idempotente del batch}}}
+  /steps:
+    get: {security: [{bearerAuth: []}], parameters: [{in: query, name: from, required: true, schema: {type: string, format: date-time}}, {in: query, name: to, required: true, schema: {type: string, format: date-time}}], responses: {'200': {description: Intervalli}}}
+  /stats/daily:
+    get: {security: [{bearerAuth: []}], responses: {'200': {description: Totali giornalieri}}}
+  /stats/timeline:
+    get: {security: [{bearerAuth: []}], responses: {'200': {description: Serie temporale}}}
+  /stats/time-of-day:
+    get: {security: [{bearerAuth: []}], responses: {'200': {description: Media per quarto d'ora}}}
+  /stats/summary:
+    get: {security: [{bearerAuth: []}], responses: {'200': {description: Sintesi e confronto}}}
+components:
+  securitySchemes:
+    bearerAuth: {type: http, scheme: bearer, bearerFormat: JWT}
+  schemas:
+    Credentials:
+      type: object
+      required: [email, password]
+      properties: {email: {type: string, format: email}, password: {type: string, minLength: 10}}
+    Tokens:
+      type: object
+      required: [accessToken, refreshToken, expiresInSeconds]
+      properties: {accessToken: {type: string}, refreshToken: {type: string}, expiresInSeconds: {type: integer}}
+
