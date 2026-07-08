@@ -1,12 +1,12 @@
-# Backup e ripristino
+# Backup and restore
 
-Backup consistente:
+Create a consistent backup:
 
 ```bash
 docker compose --env-file .env -f infra/compose.yaml exec -T postgres pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc > stepstracker.dump
 ```
 
-Ripristino su database vuoto:
+Restore into an empty database:
 
 ```bash
 docker compose --env-file .env -f infra/compose.yaml stop api
@@ -16,5 +16,5 @@ docker compose --env-file .env -f infra/compose.yaml exec -T postgres pg_restore
 docker compose --env-file .env -f infra/compose.yaml start api
 ```
 
-Conservare i backup cifrati fuori dalla VPS e provare periodicamente il ripristino.
+Keep encrypted backups outside the VPS and test the restore procedure regularly.
 

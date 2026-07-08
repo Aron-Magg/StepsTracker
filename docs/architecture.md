@@ -1,12 +1,12 @@
-# Architettura
+# Architecture
 
-L'app registra intervalli UTC di 15 minuti in Room e li invia in batch idempotenti. Health Connect è sempre preferito; `TYPE_STEP_COUNTER` viene registrato solo quando Health Connect non è disponibile o il permesso manca. Le fonti non vengono mai attivate contemporaneamente.
+The app records 15-minute UTC intervals in Room and sends them as idempotent batches. Health Connect is always preferred; `TYPE_STEP_COUNTER` is registered only when Health Connect is unavailable or permission has not been granted. The two sources are never active at the same time.
 
-Il backend calcola distanza e kcal, quindi il client non è una fonte autorevole per questi valori. La lunghezza del passo è `altezza × 0,413` per profilo `FEMALE` e `altezza × 0,415` negli altri casi. La stima energetica è `km × peso_kg × 0,75`. Sono approssimazioni non mediche.
+The backend calculates distance and calories, so the client is not authoritative for these values. Estimated stride length is `height × 0.413` for a `FEMALE` profile and `height × 0.415` otherwise. Estimated energy expenditure is `km × weight_kg × 0.75`. These are non-medical approximations.
 
-I timestamp persistiti sono UTC. Le query giornaliere convertono gli intervalli nel fuso IANA salvato nel profilo, preservando correttamente cambi dell'ora legale.
+Persisted timestamps use UTC. Daily queries convert intervals to the IANA time zone stored in the profile, correctly accounting for daylight-saving changes.
 
-## Limiti MVP
+## MVP limitations
 
-Il fallback sensore raccoglie mentre l'app è attiva. Health Connect resta il percorso affidabile per raccolta storica/background. Una futura modalità sensore continua richiederebbe un foreground service e la relativa notifica persistente Android.
+The sensor fallback collects steps while the app is active. Health Connect remains the reliable path for historical and background collection. Continuous sensor collection would require a foreground service and its mandatory persistent Android notification.
 

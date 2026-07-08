@@ -7,39 +7,39 @@ servers:
 paths:
   /auth/register:
     post:
-      summary: Registra un account
+      summary: Register an account
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/Credentials'}}}}
-      responses: {'201': {description: Creato, content: {application/json: {schema: {$ref: '#/components/schemas/Tokens'}}}}}
+      responses: {'201': {description: Created, content: {application/json: {schema: {$ref: '#/components/schemas/Tokens'}}}}}
   /auth/login:
     post:
-      summary: Avvia una sessione
+      summary: Start a session
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/Credentials'}}}}
-      responses: {'200': {description: Sessione, content: {application/json: {schema: {$ref: '#/components/schemas/Tokens'}}}}}
+      responses: {'200': {description: Session, content: {application/json: {schema: {$ref: '#/components/schemas/Tokens'}}}}}
   /auth/refresh:
     post:
-      summary: Ruota il refresh token
-      responses: {'200': {description: Nuovi token}}
+      summary: Rotate the refresh token
+      responses: {'200': {description: New tokens}}
   /auth/logout:
     post:
-      summary: Revoca il refresh token
-      responses: {'204': {description: Revocato}}
+      summary: Revoke the refresh token
+      responses: {'204': {description: Revoked}}
   /me:
-    get: {security: [{bearerAuth: []}], responses: {'200': {description: Utente corrente}}}
-    delete: {security: [{bearerAuth: []}], responses: {'204': {description: Account eliminato}}}
+    get: {security: [{bearerAuth: []}], responses: {'200': {description: Current user}}}
+    delete: {security: [{bearerAuth: []}], responses: {'204': {description: Account deleted}}}
   /me/profile:
-    put: {security: [{bearerAuth: []}], responses: {'200': {description: Profilo aggiornato}}}
+    put: {security: [{bearerAuth: []}], responses: {'200': {description: Profile updated}}}
   /steps/batch:
-    post: {security: [{bearerAuth: []}], responses: {'200': {description: Esito idempotente del batch}}}
+    post: {security: [{bearerAuth: []}], responses: {'200': {description: Idempotent batch result}}}
   /steps:
-    get: {security: [{bearerAuth: []}], parameters: [{in: query, name: from, required: true, schema: {type: string, format: date-time}}, {in: query, name: to, required: true, schema: {type: string, format: date-time}}], responses: {'200': {description: Intervalli}}}
+    get: {security: [{bearerAuth: []}], parameters: [{in: query, name: from, required: true, schema: {type: string, format: date-time}}, {in: query, name: to, required: true, schema: {type: string, format: date-time}}], responses: {'200': {description: Intervals}}}
   /stats/daily:
-    get: {security: [{bearerAuth: []}], responses: {'200': {description: Totali giornalieri}}}
+    get: {security: [{bearerAuth: []}], responses: {'200': {description: Daily totals}}}
   /stats/timeline:
-    get: {security: [{bearerAuth: []}], responses: {'200': {description: Serie temporale}}}
+    get: {security: [{bearerAuth: []}], responses: {'200': {description: Time series}}}
   /stats/time-of-day:
-    get: {security: [{bearerAuth: []}], responses: {'200': {description: Media per quarto d'ora}}}
+    get: {security: [{bearerAuth: []}], responses: {'200': {description: Average per quarter hour}}}
   /stats/summary:
-    get: {security: [{bearerAuth: []}], responses: {'200': {description: Sintesi e confronto}}}
+    get: {security: [{bearerAuth: []}], responses: {'200': {description: Summary and comparison}}}
 components:
   securitySchemes:
     bearerAuth: {type: http, scheme: bearer, bearerFormat: JWT}
@@ -52,4 +52,3 @@ components:
       type: object
       required: [accessToken, refreshToken, expiresInSeconds]
       properties: {accessToken: {type: string}, refreshToken: {type: string}, expiresInSeconds: {type: integer}}
-

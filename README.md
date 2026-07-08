@@ -5,97 +5,97 @@
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-StepsTracker è una piattaforma open source e self-hosted per raccogliere, sincronizzare e analizzare i passi registrati da un telefono Android. I dati rimangono sotto il tuo controllo, su un database PostgreSQL eseguito nella tua infrastruttura.
+StepsTracker is an open-source, self-hosted platform for collecting, synchronizing, and analyzing steps recorded by an Android phone. Your data remains under your control in a PostgreSQL database running on your own infrastructure.
 
-## Funzionalità
+## Features
 
-- Raccolta tramite Health Connect, con sensore `TYPE_STEP_COUNTER` come fallback esclusivo.
-- Cache offline con Room e sincronizzazione idempotente tramite WorkManager.
-- Registrazione e login con JWT, refresh token ruotabili e password Argon2id.
-- Passi aggregati in intervalli UTC di 15 minuti.
-- Statistiche giornaliere, trend e distribuzione per momento della giornata.
-- Stima personalizzata di distanza e kcal a partire dal profilo fisico.
-- Deployment su VPS con Docker Compose, PostgreSQL e HTTPS automatico tramite Caddy.
-- Cancellazione completa dell'account e dei dati associati.
+- Collection through Health Connect, with `TYPE_STEP_COUNTER` as an exclusive fallback.
+- Offline Room cache and idempotent synchronization through WorkManager.
+- Registration and login with JWTs, rotating refresh tokens, and Argon2id password hashing.
+- Steps aggregated into 15-minute UTC intervals.
+- Daily statistics, trends, and time-of-day distribution.
+- Personalized distance and calorie estimates based on physical profile data.
+- VPS deployment with Docker Compose, PostgreSQL, and automatic HTTPS through Caddy.
+- Complete deletion of an account and all associated data.
 
 > [!NOTE]
-> Distanza e kcal sono valori approssimativi, non misurazioni mediche. Il fallback sensore raccoglie mentre l'app è attiva; Health Connect è il percorso previsto per la raccolta storica e in background.
+> Distance and calories are approximate values, not medical measurements. The sensor fallback collects while the app is active; Health Connect is the intended path for historical and background collection.
 
-## Architettura
+## Architecture
 
 ```mermaid
 flowchart LR
-    HC[Health Connect] --> APP[App Android]
+    HC[Health Connect] --> APP[Android app]
     SC[Step Counter] -. fallback .-> APP
     APP --> ROOM[(Room)]
-    ROOM -->|batch HTTPS| API[API Ktor]
+    ROOM -->|HTTPS batches| API[Ktor API]
     API --> DB[(PostgreSQL)]
     CADDY[Caddy / TLS] --> API
 ```
 
-| Componente | Tecnologie | Responsabilità |
+| Component | Technologies | Responsibility |
 | --- | --- | --- |
-| App Android | Kotlin, Compose, Room, WorkManager | Raccolta, cache offline, sincronizzazione e UI |
-| API | Kotlin, Ktor, Flyway | Autenticazione, validazione, aggregazioni e statistiche |
-| Database | PostgreSQL 17 | Utenti, profili, dispositivi, token e intervalli |
-| Infrastruttura | Docker Compose, Caddy | Persistenza, health check e terminazione TLS |
+| Android app | Kotlin, Compose, Room, WorkManager | Collection, offline cache, synchronization, and UI |
+| API | Kotlin, Ktor, Flyway | Authentication, validation, aggregation, and statistics |
+| Database | PostgreSQL 17 | Users, profiles, devices, tokens, and intervals |
+| Infrastructure | Docker Compose, Caddy | Persistence, health checks, and TLS termination |
 
-## Requisiti
+## Requirements
 
-- Docker con Docker Compose v2.
-- [`just`](https://github.com/casey/just) per i comandi abbreviati.
-- Android Studio oppure Android SDK 36 e Java 17 per compilare l'app.
-- Per la produzione: VPS Linux, dominio DNS e porte 80/443 raggiungibili.
+- Docker with Docker Compose v2.
+- [`just`](https://github.com/casey/just) for convenient commands.
+- Android Studio, or Android SDK 36 and Java 17, to build the app.
+- For production: a Linux VPS, a DNS domain, and reachable ports 80/443.
 
-## Avvio rapido
+## Quick start
 
 ```bash
-git clone <URL_DEL_REPOSITORY>
+git clone <REPOSITORY_URL>
 cd StepsTracker
 just init
 ```
 
-Modifica `.env`, usando password casuali e un `JWT_SECRET` di almeno 32 caratteri, quindi avvia il backend:
+Edit `.env` and provide random passwords and a `JWT_SECRET` containing at least 32 characters, then start the backend:
 
 ```bash
 just dev
 just health
 ```
 
-L'API locale risponde su `http://localhost:8080`. Visualizza tutti i comandi disponibili con:
+The local API is available at `http://localhost:8080`. List every available command with:
 
 ```bash
 just
 ```
 
-## App Android
+## Android app
 
-Imposta l'URL pubblico dell'API in `android/gradle.properties`:
+Set the public API URL in `android/gradle.properties`:
 
 ```properties
 API_BASE_URL=https://steps.example.com/
 ```
 
-L'URL deve terminare con `/`. Puoi quindi aprire `android/` in Android Studio oppure compilare da terminale:
+The URL must end with `/`. Open `android/` in Android Studio or build it from the terminal:
 
 ```bash
 just android-build
 ```
 
-Su Android 14 e versioni successive Health Connect è integrato nel sistema. Sui dispositivi compatibili precedenti può essere necessario installare l'app Health Connect.
+Health Connect is built into Android 14 and later. Earlier compatible devices may require the Health Connect app to be installed.
 
-## Deployment su VPS
+## VPS deployment
 
-Configura nel `.env` il dominio che punta alla VPS e avvia il profilo di produzione:
+Set the domain pointing to your VPS in `.env`, then start the production profile:
 
 ```bash
 just prod-up
 just prod-status
 ```
 
-Caddy richiede e rinnova automaticamente il certificato TLS. PostgreSQL non viene pubblicato sulla rete esterna e l'API diretta è vincolata a localhost.
+Caddy automatically obtains and renews the TLS certificate. PostgreSQL is not exposed to the public network, and direct API access is bound to localhost.
 
-Prima di ogni aggiornamento:
+Before updating:
 
 ```bash
 just backup
@@ -103,48 +103,47 @@ git pull --ff-only
 just prod-up
 ```
 
-Consulta [deployment](docs/deployment.md) e [backup/ripristino](docs/backup.md) per la procedura completa.
+See the [deployment guide](docs/deployment.md) and [backup and restore guide](docs/backup.md) for complete procedures.
 
-## Sviluppo e test
+## Development and testing
 
 ```bash
-just test              # backend e Android
-just backend-test      # test JVM del backend
-just android-test      # test unitari Android
-just compose-validate  # validazione Docker Compose
-just logs              # log locali aggregati
+just test              # Backend and Android
+just backend-test      # Backend JVM tests
+just android-test      # Android unit tests
+just compose-validate  # Validate the Compose configuration
+just logs              # Follow combined local logs
 ```
 
-La specifica REST è disponibile in [docs/openapi.yaml](docs/openapi.yaml). Le date scambiate con il server sono ISO-8601 e gli intervalli vengono persistiti in UTC.
+The REST specification is available at [docs/openapi.yaml](docs/openapi.yaml). Dates exchanged with the server use ISO-8601, and intervals are persisted in UTC.
 
-## Struttura del repository
+## Repository structure
 
 ```text
 .
-├── android/     App Android nativa
-├── backend/     API Ktor e migrazioni Flyway
-├── docs/        Architettura, API, privacy e operazioni
-├── infra/       Docker Compose e configurazione Caddy
-├── justfile     Comandi di sviluppo e deployment
-└── LICENSE      Licenza MIT
+├── android/     Native Android app
+├── backend/     Ktor API and Flyway migrations
+├── docs/        Architecture, API, privacy, and operations
+├── infra/       Docker Compose and Caddy configuration
+├── justfile     Development and deployment commands
+└── LICENSE      MIT license
 ```
 
-## Sicurezza e privacy
+## Security and privacy
 
-Non committare mai `.env`, dump del database o credenziali. In produzione usa esclusivamente HTTPS, conserva backup cifrati fuori dalla VPS e prova periodicamente il ripristino. Ulteriori dettagli sono disponibili in [docs/privacy.md](docs/privacy.md).
+Never commit `.env`, database dumps, or credentials. Use HTTPS exclusively in production, keep encrypted backups outside the VPS, and test restoration regularly. See [docs/privacy.md](docs/privacy.md) for details.
 
-Per segnalare una vulnerabilità, evita issue pubbliche contenenti dettagli sfruttabili o dati personali e contatta privatamente il maintainer del repository.
+To report a vulnerability, do not create a public issue containing exploitable details or personal data. Contact the repository maintainer privately instead.
 
-## Contribuire
+## Contributing
 
-Issue e pull request sono benvenute. Prima di proporre una modifica:
+Issues and pull requests are welcome. Before proposing a change:
 
-1. Mantieni separati raccolta Android, sincronizzazione e logica server.
-2. Aggiungi test per i comportamenti modificati.
-3. Esegui `just test` e `just compose-validate`.
-4. Non includere dati sanitari reali nei fixture o nei log.
+1. Keep Android collection, synchronization, and server logic separated.
+2. Add tests for modified behavior.
+3. Run `just test` and `just compose-validate`.
+4. Do not include real health data in fixtures or logs.
 
-## Licenza
+## License
 
-Distribuito con licenza [MIT](LICENSE).
-
+Distributed under the [MIT License](LICENSE).

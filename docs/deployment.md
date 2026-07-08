@@ -1,25 +1,25 @@
-# Deployment su VPS
+# VPS deployment
 
-Prerequisiti: Docker Compose, un record DNS verso la VPS e porte 80/443 aperte.
+Prerequisites: Docker Compose, a DNS record pointing to the VPS, and open ports 80/443.
 
 ```bash
 cp .env.example .env
-# compilare .env con password casuali, JWT_SECRET >= 32 caratteri e dominio reale
+# Fill .env with random passwords, a JWT_SECRET of at least 32 characters, and the real domain
 docker compose --env-file .env -f infra/compose.yaml --profile production up -d --build
 docker compose --env-file .env -f infra/compose.yaml ps
 curl https://$DOMAIN/health
 ```
 
-PostgreSQL è raggiungibile solo dalla rete Docker. La porta 8080 dell'API è vincolata a localhost per diagnostica; Caddy è l'unico ingresso pubblico.
+PostgreSQL is reachable only from the Docker network. API port 8080 is bound to localhost for diagnostics; Caddy is the only public entry point.
 
-## Aggiornamento
+## Updating
 
-Eseguire prima un backup, poi:
+Create a backup first, then run:
 
 ```bash
 git pull --ff-only
 docker compose --env-file .env -f infra/compose.yaml --profile production up -d --build
 ```
 
-Flyway applica automaticamente migrazioni additive all'avvio.
+Flyway automatically applies additive migrations during startup.
 
