@@ -5,7 +5,7 @@ import kotlinx.coroutines.flow.Flow
 import java.time.*
 import java.util.UUID
 
-class StepsRepository(private val dao:StepIntervalDao,private val api:ApiClient,private val deviceId:String) {
+class StepsRepository(private val dao:StepIntervalDao,private val api:ApiClient,private val deviceId:String,private val onChanged:()->Unit={}) {
     fun observeDay(day:LocalDate,zone:ZoneId=ZoneId.systemDefault()):Flow<List<StepIntervalEntity>> {
         val from=day.atStartOfDay(zone).toInstant().toEpochMilli();val to=day.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
         return dao.observe(from,to)
@@ -14,7 +14,8 @@ class StepsRepository(private val dao:StepIntervalDao,private val api:ApiClient,
         val aligned=IntervalMath.alignedEpochSeconds(start)
         val id=IntervalMath.stableId(deviceId,source,aligned)
         val entity=StepIntervalEntity(id,source,aligned*1000,(aligned+900)*1000,steps.coerceAtLeast(0))
-        if(source=="STEP_COUNTER")dao.add(entity) else dao.upsert(listOf(entity))
+        if(source=="STEP_COUNTER")dao.add(entity) else dao.replaceWithHealthConnect(entity)
+        onChanged()
     }
     suspend fun sync():Int {
         val pending=dao.pending();if(pending.isEmpty())return 0

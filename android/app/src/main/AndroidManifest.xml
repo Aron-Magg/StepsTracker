@@ -11,7 +11,9 @@
     <application
         android:name=".StepsTrackerApp"
         android:allowBackup="false"
+        android:icon="@drawable/stepstracker_logo"
         android:label="StepsTracker"
+        android:roundIcon="@drawable/stepstracker_logo"
         android:theme="@style/Theme.StepsTracker"
         android:usesCleartextTraffic="false">
         <activity android:name=".MainActivity" android:exported="true">
@@ -30,6 +32,11 @@
                 <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
             </intent-filter>
         </activity-alias>
+        <receiver android:name=".widget.StepWidgetProvider" android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/step_widget_info" />
+        </receiver>
     </application>
 </manifest>
-

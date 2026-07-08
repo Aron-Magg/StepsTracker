@@ -7,7 +7,7 @@ data class AppConfig(
     val jwtSecret: String = env("JWT_SECRET", "development-secret-change-me-32-bytes"),
     val accessMinutes: Long = env("ACCESS_TOKEN_MINUTES", "15").toLong(),
     val refreshDays: Long = env("REFRESH_TOKEN_DAYS", "30").toLong(),
+    val seedDemoUser: Boolean = env("SEED_DEMO_USER", "true").toBooleanStrictOrNull() ?: true,
 )
 
 private fun env(name: String, fallback: String) = System.getenv(name) ?: fallback
-

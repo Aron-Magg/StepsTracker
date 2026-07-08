@@ -14,7 +14,11 @@ StepsTracker is an open-source, self-hosted platform for collecting, synchronizi
 - Registration and login with JWTs, rotating refresh tokens, and Argon2id password hashing.
 - Steps aggregated into 15-minute UTC intervals.
 - Daily statistics, trends, and time-of-day distribution.
+- Time-aware weight history so profile changes never rewrite past calorie estimates.
 - Personalized distance and calorie estimates based on physical profile data.
+- A home-screen widget showing today’s synchronized steps.
+- Automatic light/dark appearance following the Android system theme.
+- Runtime server URL selection, including optional reverse-proxy path prefixes.
 - VPS deployment with Docker Compose, PostgreSQL, and automatic HTTPS through Caddy.
 - Complete deletion of an account and all associated data.
 
@@ -67,6 +71,26 @@ The local API is available at `http://localhost:8080`. List every available comm
 ```bash
 just
 ```
+
+Fresh databases include a demonstration account with data covering the current day back through the previous two months:
+
+```text
+Email: demo@example.com
+Password: demo
+```
+
+Set `SEED_DEMO_USER=false` in production to disable demo-account creation.
+
+### Testing from a phone on the local network
+
+On a trusted Wi-Fi network, expose the development API to the LAN and install a debug build configured with the computer's local address:
+
+```bash
+just lan-up
+just android-install-lan
+```
+
+The debug manifest permits local HTTP traffic; release builds remain HTTPS-only. Allow the configured API port through the computer firewall if required. Never expose this development endpoint directly to the public internet.
 
 ## Android app
 

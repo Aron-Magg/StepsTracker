@@ -1,2 +1,5 @@
-<resources><string name="app_name">StepsTracker</string></resources>
-
+<resources>
+    <string name="app_name">StepsTracker</string>
+    <string name="widget_steps_today">steps today</string>
+    <string name="widget_description">Today’s step count</string>
+</resources>

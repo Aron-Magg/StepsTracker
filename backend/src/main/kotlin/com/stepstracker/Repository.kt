@@ -9,6 +9,32 @@ import java.util.UUID
 data class UserRecord(val id: UUID, val email: String, val passwordHash: String)
 
 class Repository(private val db: Database, private val security: Security, private val config: AppConfig) {
+    fun seedDemoUser() {
+        if(userByEmail("demo@example.com")!=null)return
+        db.transaction { c->
+            val userId=UUID.nameUUIDFromBytes("stepstracker-demo-user".toByteArray())
+            val deviceId=UUID.nameUUIDFromBytes("stepstracker-demo-device".toByteArray())
+            val now=Instant.now();val zone=ZoneId.of("Europe/Zurich");val today=LocalDate.now(zone);val firstDay=today.minusMonths(2)
+            c.prepareStatement("INSERT INTO users(id,email,password_hash,created_at,updated_at) VALUES (?,? ,?, ?,?) ON CONFLICT(email) DO NOTHING").use { p->p.setObject(1,userId);p.setString(2,"demo@example.com");p.setString(3,security.hashPassword("demo"));p.setObject(4,firstDay.atStartOfDay(zone).toOffsetDateTime());p.setObject(5,now.atOffset(ZoneOffset.UTC));p.executeUpdate() }
+            c.prepareStatement("INSERT INTO user_profiles(user_id,weight_kg,height_cm,birth_date,sex,timezone) VALUES (?,75,178,'1990-01-01','OTHER','Europe/Zurich') ON CONFLICT(user_id) DO NOTHING").use { p->p.setObject(1,userId);p.executeUpdate() }
+            c.prepareStatement("INSERT INTO user_weight_history(user_id,weight_kg,effective_at) VALUES (?,75,?) ON CONFLICT(user_id,effective_at) DO NOTHING").use { p->p.setObject(1,userId);p.setObject(2,firstDay.atStartOfDay(zone).toOffsetDateTime());p.executeUpdate() }
+            c.prepareStatement("INSERT INTO devices(id,user_id,platform,model,last_sync_at) VALUES (?,?,'ANDROID','Demo device',now()) ON CONFLICT(id,user_id) DO NOTHING").use { p->p.setObject(1,deviceId);p.setObject(2,userId);p.executeUpdate() }
+            val stride=1.78*0.415;val slots=listOf(8 to 0.20,12 to 0.35,17 to 0.30,20 to 0.15)
+            c.prepareStatement("INSERT INTO step_intervals(id,user_id,device_id,source,interval_start,interval_end,steps,distance_m_estimated,calories_kcal_estimated) VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id,device_id,interval_start) DO NOTHING").use { p->
+                var day=firstDay;var index=0
+                while(!day.isAfter(today)) {
+                    val total=2500+(index*791%6500)
+                    slots.forEachIndexed { slotIndex,(hour,ratio)->
+                        val start=day.atTime(hour,0).atZone(zone).toInstant();val steps=if(slotIndex==slots.lastIndex)total-slots.dropLast(1).sumOf { (total*it.second).toInt() } else (total*ratio).toInt();val distance=steps*stride
+                        p.setObject(1,UUID.nameUUIDFromBytes("demo:$day:$hour".toByteArray()));p.setObject(2,userId);p.setObject(3,deviceId);p.setString(4,"HEALTH_CONNECT");p.setObject(5,start.atOffset(ZoneOffset.UTC));p.setObject(6,start.plusSeconds(900).atOffset(ZoneOffset.UTC));p.setInt(7,steps);p.setDouble(8,distance);p.setDouble(9,distance/1000*75*0.75);p.addBatch()
+                    }
+                    day=day.plusDays(1);index++
+                }
+                p.executeBatch()
+            }
+        }
+    }
+
     fun createUser(email: String, hash: String): UserRecord = db.query { c ->
         val id = UUID.randomUUID()
         c.prepareStatement("INSERT INTO users(id,email,password_hash) VALUES (?,?,?)").use { p ->
@@ -56,17 +82,21 @@ class Repository(private val db: Database, private val security: Security, priva
     }}
 
     fun saveProfile(userId: UUID, value: ProfileRequest) = db.transaction { c ->
+        val previousWeight = c.prepareStatement("SELECT weight_kg FROM user_profiles WHERE user_id=?").use { p ->
+            p.setObject(1,userId);p.executeQuery().use { r->if(r.next())r.getDouble(1) else null }
+        }
         c.prepareStatement("""INSERT INTO user_profiles(user_id,weight_kg,height_cm,birth_date,sex,timezone) VALUES (?,?,?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET weight_kg=excluded.weight_kg,height_cm=excluded.height_cm,birth_date=excluded.birth_date,sex=excluded.sex,timezone=excluded.timezone,updated_at=now()""").use { p ->
             p.setObject(1,userId); p.setDouble(2,value.weightKg); p.setDouble(3,value.heightCm); p.setObject(4,LocalDate.parse(value.birthDate)); p.setString(5,value.sex); p.setString(6,value.timezone); p.executeUpdate()
         }
-        recalculate(c, userId, value)
+        if(previousWeight == null || kotlin.math.abs(previousWeight-value.weightKg) >= 0.005) {
+            c.prepareStatement("INSERT INTO user_weight_history(user_id,weight_kg,effective_at) VALUES (?,?,now())").use { p->p.setObject(1,userId);p.setDouble(2,value.weightKg);p.executeUpdate() }
+        }
     }
 
-    private fun recalculate(c: Connection, userId: UUID, profile: ProfileRequest) {
-        val stride = profile.heightCm / 100.0 * if (profile.sex == "FEMALE") 0.413 else 0.415
-        c.prepareStatement("UPDATE step_intervals SET distance_m_estimated=steps*?,calories_kcal_estimated=(steps*?/1000.0)*?*0.75,updated_at=now() WHERE user_id=?").use { p ->
-            p.setDouble(1,stride); p.setDouble(2,stride); p.setDouble(3,profile.weightKg); p.setObject(4,userId); p.executeUpdate()
-        }
+    fun weightHistory(userId:UUID):List<WeightEntry> = db.query { c->c.prepareStatement("SELECT weight_kg,effective_at FROM user_weight_history WHERE user_id=? ORDER BY effective_at DESC").use { p->p.setObject(1,userId);p.executeQuery().use { r->buildList { while(r.next())add(WeightEntry(r.getDouble(1),r.getObject(2,OffsetDateTime::class.java).toInstant().toString())) } } } }
+
+    private fun weightAt(c:Connection,userId:UUID,instant:Instant,fallback:Double):Double = c.prepareStatement("SELECT weight_kg FROM user_weight_history WHERE user_id=? AND effective_at<=? ORDER BY effective_at DESC LIMIT 1").use { p->
+        p.setObject(1,userId);p.setObject(2,instant.atOffset(ZoneOffset.UTC));p.executeQuery().use { r->if(r.next())r.getDouble(1) else fallback }
     }
 
     fun deleteUser(userId: UUID) = db.query { c -> c.prepareStatement("DELETE FROM users WHERE id=?").use { p -> p.setObject(1,userId); p.executeUpdate() } }
@@ -83,9 +113,10 @@ class Repository(private val db: Database, private val security: Security, priva
                 require(item.source in setOf("HEALTH_CONNECT", "STEP_COUNTER")); require(item.steps in 0..100000)
                 require(Duration.between(start,end).toMinutes() == 15L && start.epochSecond % 900 == 0L)
                 c.prepareStatement("INSERT INTO devices(id,user_id,platform,model,last_sync_at) VALUES (?,?,'ANDROID',?,now()) ON CONFLICT(id,user_id) DO UPDATE SET model=excluded.model,last_sync_at=now()").use { p -> p.setObject(1,device);p.setObject(2,userId);p.setString(3,item.deviceModel.take(128));p.executeUpdate() }
-                c.prepareStatement("""INSERT INTO step_intervals(id,user_id,device_id,source,interval_start,interval_end,steps,distance_m_estimated,calories_kcal_estimated) VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id,device_id,source,interval_start) DO UPDATE SET steps=excluded.steps,distance_m_estimated=excluded.distance_m_estimated,calories_kcal_estimated=excluded.calories_kcal_estimated,updated_at=now()""").use { p ->
+                c.prepareStatement("""INSERT INTO step_intervals(id,user_id,device_id,source,interval_start,interval_end,steps,distance_m_estimated,calories_kcal_estimated) VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id,device_id,interval_start) DO UPDATE SET source=CASE WHEN excluded.source='HEALTH_CONNECT' THEN excluded.source ELSE step_intervals.source END,steps=CASE WHEN excluded.source='HEALTH_CONNECT' OR step_intervals.source!='HEALTH_CONNECT' THEN excluded.steps ELSE step_intervals.steps END,distance_m_estimated=CASE WHEN excluded.source='HEALTH_CONNECT' OR step_intervals.source!='HEALTH_CONNECT' THEN excluded.distance_m_estimated ELSE step_intervals.distance_m_estimated END,calories_kcal_estimated=CASE WHEN excluded.source='HEALTH_CONNECT' OR step_intervals.source!='HEALTH_CONNECT' THEN excluded.calories_kcal_estimated ELSE step_intervals.calories_kcal_estimated END,updated_at=now()""").use { p ->
                     val distance = item.steps * stride
-                    p.setObject(1,id);p.setObject(2,userId);p.setObject(3,device);p.setString(4,item.source);p.setObject(5,start.atOffset(ZoneOffset.UTC));p.setObject(6,end.atOffset(ZoneOffset.UTC));p.setInt(7,item.steps);p.setDouble(8,distance);p.setDouble(9,distance/1000*profile.weightKg*0.75);p.executeUpdate()
+                    val intervalWeight = weightAt(c,userId,start,profile.weightKg)
+                    p.setObject(1,id);p.setObject(2,userId);p.setObject(3,device);p.setString(4,item.source);p.setObject(5,start.atOffset(ZoneOffset.UTC));p.setObject(6,end.atOffset(ZoneOffset.UTC));p.setInt(7,item.steps);p.setDouble(8,distance);p.setDouble(9,distance/1000*intervalWeight*0.75);p.executeUpdate()
                 }
                 accepted += item.id
             } catch (e: Exception) { rejected += RejectedInterval(item.id, "INVALID_INTERVAL") }

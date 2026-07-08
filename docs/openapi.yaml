@@ -28,6 +28,8 @@ paths:
     delete: {security: [{bearerAuth: []}], responses: {'204': {description: Account deleted}}}
   /me/profile:
     put: {security: [{bearerAuth: []}], responses: {'200': {description: Profile updated}}}
+  /me/weight-history:
+    get: {security: [{bearerAuth: []}], responses: {'200': {description: Weight history ordered from newest to oldest}}}
   /steps/batch:
     post: {security: [{bearerAuth: []}], responses: {'200': {description: Idempotent batch result}}}
   /steps:

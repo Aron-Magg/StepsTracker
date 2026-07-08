@@ -1,0 +1,172 @@
+{
+  "android/app/build.gradle.kts": {
+    "mtime": 1783525624.1819963,
+    "ast_hash": "06026140ad8a5303e969168a4ec5c913",
+    "semantic_hash": "06026140ad8a5303e969168a4ec5c913"
+  },
+  "android/app/src/main/java/com/stepstracker/android/MainActivity.kt": {
+    "mtime": 1783531297.5558786,
+    "ast_hash": "15a78783c36fe28ed2ec9c8d86aa059d",
+    "semantic_hash": "15a78783c36fe28ed2ec9c8d86aa059d"
+  },
+  "android/app/src/main/java/com/stepstracker/android/StepsTrackerApp.kt": {
+    "mtime": 1783531210.2006972,
+    "ast_hash": "bfa858229389bbda62adc223c04643ca",
+    "semantic_hash": "bfa858229389bbda62adc223c04643ca"
+  },
+  "android/app/src/main/java/com/stepstracker/android/data/Api.kt": {
+    "mtime": 1783531210.2006972,
+    "ast_hash": "dcbeb2797ef2279b251e795fc6a3927f",
+    "semantic_hash": "dcbeb2797ef2279b251e795fc6a3927f"
+  },
+  "android/app/src/main/java/com/stepstracker/android/data/IntervalMath.kt": {
+    "mtime": 1783525780.94672,
+    "ast_hash": "5753e28385f5c71fed8a54701ec3cfbe",
+    "semantic_hash": "5753e28385f5c71fed8a54701ec3cfbe"
+  },
+  "android/app/src/main/java/com/stepstracker/android/data/LocalData.kt": {
+    "mtime": 1783529765.152365,
+    "ast_hash": "03f1c5e71bd2b76dae72edfd331aab2b",
+    "semantic_hash": "03f1c5e71bd2b76dae72edfd331aab2b"
+  },
+  "android/app/src/main/java/com/stepstracker/android/data/SessionStore.kt": {
+    "mtime": 1783531217.6807122,
+    "ast_hash": "8d9b865fe98b0479f4f13d26b1cdf278",
+    "semantic_hash": "8d9b865fe98b0479f4f13d26b1cdf278"
+  },
+  "android/app/src/main/java/com/stepstracker/android/data/StepsRepository.kt": {
+    "mtime": 1783529704.9749432,
+    "ast_hash": "e52d382d07ad5af23f0d2f3fc725f7ce",
+    "semantic_hash": "e52d382d07ad5af23f0d2f3fc725f7ce"
+  },
+  "android/app/src/main/java/com/stepstracker/android/tracking/StepTracking.kt": {
+    "mtime": 1783529632.8297591,
+    "ast_hash": "e476c34f788b6e80fc5fdaff4cba2448",
+    "semantic_hash": "e476c34f788b6e80fc5fdaff4cba2448"
+  },
+  "android/app/src/main/java/com/stepstracker/android/widget/StepWidgetProvider.kt": {
+    "mtime": 1783529665.5873709,
+    "ast_hash": "1a046488c347a7aa4e948be796e3fa89",
+    "semantic_hash": "1a046488c347a7aa4e948be796e3fa89"
+  },
+  "android/app/src/test/java/com/stepstracker/android/data/IntervalMathTest.kt": {
+    "mtime": 1783525780.94672,
+    "ast_hash": "e6a06ccef44837f8d6c62d03dea33932",
+    "semantic_hash": "e6a06ccef44837f8d6c62d03dea33932"
+  },
+  "android/build.gradle.kts": {
+    "mtime": 1783525624.1819963,
+    "ast_hash": "31000b9ff1ef8fbfa2501580b37a8046",
+    "semantic_hash": "31000b9ff1ef8fbfa2501580b37a8046"
+  },
+  "android/gradlew": {
+    "mtime": 1783525461.512745,
+    "ast_hash": "cf6bb46b25d0768b3929c9b1377bf481",
+    "semantic_hash": "cf6bb46b25d0768b3929c9b1377bf481"
+  },
+  "android/settings.gradle.kts": {
+    "mtime": 1783525118.8952374,
+    "ast_hash": "6e91c00fd72d85e63fe460bb419c49fc",
+    "semantic_hash": "6e91c00fd72d85e63fe460bb419c49fc"
+  },
+  "backend/build.gradle.kts": {
+    "mtime": 1783524940.3215494,
+    "ast_hash": "91f6c50d2eff86a06ed9e76e22827efa",
+    "semantic_hash": "91f6c50d2eff86a06ed9e76e22827efa"
+  },
+  "backend/settings.gradle.kts": {
+    "mtime": 1783524940.3214786,
+    "ast_hash": "0788634bea6019eeb31e271d26fa0f8a",
+    "semantic_hash": "0788634bea6019eeb31e271d26fa0f8a"
+  },
+  "backend/src/main/kotlin/com/stepstracker/Application.kt": {
+    "mtime": 1783531335.7869608,
+    "ast_hash": "cf1e06d3a9ef5609616d220a44476f51",
+    "semantic_hash": "cf1e06d3a9ef5609616d220a44476f51"
+  },
+  "backend/src/main/kotlin/com/stepstracker/Config.kt": {
+    "mtime": 1783531335.785961,
+    "ast_hash": "89b76c58e89a19748c8de1d37de28e5f",
+    "semantic_hash": "89b76c58e89a19748c8de1d37de28e5f"
+  },
+  "backend/src/main/kotlin/com/stepstracker/Database.kt": {
+    "mtime": 1783525017.589028,
+    "ast_hash": "d7d40bc6e46d74d9d69f909110be8de9",
+    "semantic_hash": "d7d40bc6e46d74d9d69f909110be8de9"
+  },
+  "backend/src/main/kotlin/com/stepstracker/Models.kt": {
+    "mtime": 1783529544.9879615,
+    "ast_hash": "d8a2193d9935e83958c9bfeaf4e56192",
+    "semantic_hash": "d8a2193d9935e83958c9bfeaf4e56192"
+  },
+  "backend/src/main/kotlin/com/stepstracker/Repository.kt": {
+    "mtime": 1783531335.7869608,
+    "ast_hash": "5da17bd55201206019fc441509213f77",
+    "semantic_hash": "5da17bd55201206019fc441509213f77"
+  },
+  "backend/src/main/kotlin/com/stepstracker/Security.kt": {
+    "mtime": 1783525017.5891383,
+    "ast_hash": "0d6f5352be588fb4014befaa877e18b4",
+    "semantic_hash": "0d6f5352be588fb4014befaa877e18b4"
+  },
+  "backend/src/main/resources/db/migration/V1__initial_schema.sql": {
+    "mtime": 1783524940.3216627,
+    "ast_hash": "1ae6debf65e960b34bb6036b6e911595",
+    "semantic_hash": "1ae6debf65e960b34bb6036b6e911595"
+  },
+  "backend/src/main/resources/db/migration/V2__weight_history.sql": {
+    "mtime": 1783529544.9879615,
+    "ast_hash": "8050acd48cf16dad4752d31e15670578",
+    "semantic_hash": "8050acd48cf16dad4752d31e15670578"
+  },
+  "backend/src/main/resources/db/migration/V3__exclusive_step_source.sql": {
+    "mtime": 1783529704.973943,
+    "ast_hash": "447f33ad273ca6b468e72e16214c0ffd",
+    "semantic_hash": "447f33ad273ca6b468e72e16214c0ffd"
+  },
+  "backend/src/test/kotlin/com/stepstracker/SecurityTest.kt": {
+    "mtime": 1783525069.2828746,
+    "ast_hash": "24b041f8ae3e0d2d879b367a9d0cb1c3",
+    "semantic_hash": "24b041f8ae3e0d2d879b367a9d0cb1c3"
+  },
+  "README.md": {
+    "mtime": 1783531335.7869608,
+    "ast_hash": "1499c9586ed3c165c53147ed1ee5f3d0",
+    "semantic_hash": "1499c9586ed3c165c53147ed1ee5f3d0"
+  },
+  "docs/architecture.md": {
+    "mtime": 1783530219.4741023,
+    "ast_hash": "2acf23456fe2add78e2c2a01951d17cd",
+    "semantic_hash": "2acf23456fe2add78e2c2a01951d17cd"
+  },
+  "docs/backup.md": {
+    "mtime": 1783526883.481644,
+    "ast_hash": "77fe0292b3a00526e7b99e8a07cb1086",
+    "semantic_hash": "77fe0292b3a00526e7b99e8a07cb1086"
+  },
+  "docs/deployment.md": {
+    "mtime": 1783526883.48149,
+    "ast_hash": "47f2754dd2465fda5ecf1a8663f2f62a",
+    "semantic_hash": "47f2754dd2465fda5ecf1a8663f2f62a"
+  },
+  "docs/openapi.yaml": {
+    "mtime": 1783530219.4741023,
+    "ast_hash": "bd39536a8b8315e56d3a7749541a4d31",
+    "semantic_hash": "bd39536a8b8315e56d3a7749541a4d31"
+  },
+  "docs/privacy.md": {
+    "mtime": 1783526883.481781,
+    "ast_hash": "5edbb7b7caa60575c7e664f841acbda8",
+    "semantic_hash": "5edbb7b7caa60575c7e664f841acbda8"
+  },
+  "infra/compose.yaml": {
+    "mtime": 1783531335.785961,
+    "ast_hash": "1240013cc9b2a9b4b80a2af68ad71c19",
+    "semantic_hash": "1240013cc9b2a9b4b80a2af68ad71c19"
+  },
+  "android/app/src/main/res/drawable-nodpi/stepstracker_logo.png": {
+    "mtime": 1783529715.8928316,
+    "ast_hash": "18336a66e09881b2be5898f06403eb58",
+    "semantic_hash": "18336a66e09881b2be5898f06403eb58"
+  }
+}

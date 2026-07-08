@@ -30,7 +30,7 @@ class StepTrackingManager(private val context:Context,private val repository:Ste
             val client=HealthConnectClient.getOrCreate(context)
             val permission=HealthPermission.getReadPermission(StepsRecord::class)
             if(client.permissionController.getGrantedPermissions().contains(permission)) {
-                source=TrackingSource.HEALTH_CONNECT;importHealthConnect(client);return source
+                source=TrackingSource.HEALTH_CONNECT;HealthConnectImporter.importAvailable(context,repository);return source
             }
         }
         if(ContextCompat.checkSelfPermission(context,Manifest.permission.ACTIVITY_RECOGNITION)==PackageManager.PERMISSION_GRANTED) {
@@ -42,13 +42,6 @@ class StepTrackingManager(private val context:Context,private val repository:Ste
 
     fun healthPermissions():Set<String> = setOf(HealthPermission.getReadPermission(StepsRecord::class))
 
-    private suspend fun importHealthConnect(client:HealthConnectClient) {
-        val end=Instant.now();val start=end.minus(Duration.ofDays(30)).epochSecond.let { Instant.ofEpochSecond(it/900*900) }
-        client.aggregateGroupByDuration(AggregateGroupByDurationRequest(setOf(StepsRecord.COUNT_TOTAL),TimeRangeFilter.between(start,end),Duration.ofMinutes(15))).forEach { bucket ->
-            repository.store("HEALTH_CONNECT",bucket.startTime,(bucket.result[StepsRecord.COUNT_TOTAL] ?: 0L).toInt())
-        }
-    }
-
     override fun onSensorChanged(event:SensorEvent) {
         val current=event.values.firstOrNull()?.toLong() ?: return
         val previous=prefs.getLong("reading",current);val previousBoot=prefs.getLong("boot",android.os.SystemClock.elapsedRealtime())
@@ -59,4 +52,20 @@ class StepTrackingManager(private val context:Context,private val repository:Ste
     }
     override fun onAccuracyChanged(sensor:Sensor?,accuracy:Int)=Unit
     fun stopSensor()=sensorManager.unregisterListener(this)
+}
+
+object HealthConnectImporter {
+    suspend fun importAvailable(context:Context,repository:StepsRepository):Int {
+        if(HealthConnectClient.getSdkStatus(context)!=HealthConnectClient.SDK_AVAILABLE)return 0
+        val client=HealthConnectClient.getOrCreate(context)
+        val permission=HealthPermission.getReadPermission(StepsRecord::class)
+        if(permission !in client.permissionController.getGrantedPermissions())return 0
+        val end=Instant.now();val start=end.minus(Duration.ofDays(30)).epochSecond.let { Instant.ofEpochSecond(it/900*900) }
+        var total=0
+        client.aggregateGroupByDuration(AggregateGroupByDurationRequest(setOf(StepsRecord.COUNT_TOTAL),TimeRangeFilter.between(start,end),Duration.ofMinutes(15))).forEach { bucket ->
+            val steps=(bucket.result[StepsRecord.COUNT_TOTAL] ?: 0L).toInt()
+            repository.store("HEALTH_CONNECT",bucket.startTime,steps);total+=steps
+        }
+        return total
+    }
 }

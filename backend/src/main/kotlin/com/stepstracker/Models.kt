@@ -10,6 +10,7 @@ import kotlinx.serialization.Serializable
 @Serializable data class TokenResponse(val accessToken: String, val refreshToken: String, val expiresInSeconds: Long)
 @Serializable data class ProfileRequest(val weightKg: Double, val heightCm: Double, val birthDate: String, val sex: String, val timezone: String)
 @Serializable data class ProfileResponse(val weightKg: Double, val heightCm: Double, val birthDate: String, val sex: String, val timezone: String)
+@Serializable data class WeightEntry(val weightKg: Double, val effectiveAt: String)
 @Serializable data class MeResponse(val id: String, val email: String, val profile: ProfileResponse?)
 
 @Serializable
@@ -30,4 +31,3 @@ data class StepIntervalRequest(
 @Serializable data class DailyPoint(val date: String, val steps: Long, val distanceMeters: Double, val estimatedKcal: Double)
 @Serializable data class TimeOfDayPoint(val quarterHour: Int, val steps: Double)
 @Serializable data class SummaryResponse(val steps: Long, val distanceMeters: Double, val estimatedKcal: Double, val dailyAverage: Double, val changePercent: Double?)
-

@@ -4,19 +4,24 @@ import android.app.Application
 import android.provider.Settings
 import androidx.work.*
 import com.stepstracker.android.data.*
+import com.stepstracker.android.tracking.HealthConnectImporter
+import com.stepstracker.android.widget.StepWidgetProvider
 import java.util.concurrent.TimeUnit
 
 class StepsTrackerApp:Application() {
-    lateinit var database:StepsDatabase;lateinit var session:SessionStore;lateinit var api:ApiClient;lateinit var steps:StepsRepository
+    lateinit var database:StepsDatabase;lateinit var session:SessionStore;lateinit var server:ServerSettings;lateinit var api:ApiClient;lateinit var steps:StepsRepository
     override fun onCreate() {
-        super.onCreate();database=StepsDatabase.create(this);session=SessionStore(this);api=ApiClient(session)
+        super.onCreate();database=StepsDatabase.create(this);session=SessionStore(this);server=ServerSettings(this);api=ApiClient(session,server)
         val deviceId=Settings.Secure.getString(contentResolver,Settings.Secure.ANDROID_ID)
-        steps=StepsRepository(database.intervals(),api,deviceId)
+        steps=StepsRepository(database.intervals(),api,deviceId) { StepWidgetProvider.requestUpdate(this) }
         WorkManager.getInstance(this).enqueueUniquePeriodicWork("steps-sync",ExistingPeriodicWorkPolicy.KEEP,PeriodicWorkRequestBuilder<SyncWorker>(15,TimeUnit.MINUTES).setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()).build())
     }
 }
 
 class SyncWorker(context:android.content.Context,params:WorkerParameters):CoroutineWorker(context,params) {
-    override suspend fun doWork():Result=runCatching { (applicationContext as StepsTrackerApp).steps.sync();Result.success() }.getOrElse { Result.retry() }
+    override suspend fun doWork():Result=runCatching {
+        val app=applicationContext as StepsTrackerApp
+        HealthConnectImporter.importAvailable(applicationContext,app.steps)
+        app.steps.sync();StepWidgetProvider.requestUpdate(applicationContext);Result.success()
+    }.getOrElse { Result.retry() }
 }
-

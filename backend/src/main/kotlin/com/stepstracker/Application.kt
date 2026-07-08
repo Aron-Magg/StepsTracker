@@ -32,6 +32,7 @@ fun Application.module(config: AppConfig = AppConfig()) {
     val database = Database(config)
     val security = Security(config)
     val repository = Repository(database, security, config)
+    if(config.seedDemoUser) repository.seedDemoUser()
     val logger = log
     environment.monitor.subscribe(ApplicationStopped) { database.close() }
 
@@ -84,6 +85,7 @@ fun Application.module(config: AppConfig = AppConfig()) {
             route("/api/v1") {
                 route("/me") {
                     get { val id=call.userId(); val user=repository.userById(id)!!; call.respond(MeResponse(id.toString(),user.email,repository.profile(id))) }
+                    get("/weight-history") { call.respond(repository.weightHistory(call.userId())) }
                     put("/profile") {
                         val input=call.receive<ProfileRequest>(); validateProfile(input); repository.saveProfile(call.userId(),input); call.respond(repository.profile(call.userId())!!)
                     }

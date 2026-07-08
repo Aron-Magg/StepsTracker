@@ -8,6 +8,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -20,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -47,24 +50,26 @@ class MainActivity:ComponentActivity() {
     override fun onStop() { tracking.stopSensor();super.onStop() }
 }
 
-data class UiState(val loggedIn:Boolean=false,val loading:Boolean=false,val error:String?=null,val me:Me?=null,val intervals:List<StepIntervalEntity> = emptyList(),val daily:List<DailyPoint> = emptyList(),val timeOfDay:List<TimePoint> = emptyList(),val summary:Summary?=null,val tab:Int=0)
+data class UiState(val loggedIn:Boolean=false,val loading:Boolean=false,val error:String?=null,val serverUrl:String="",val me:Me?=null,val intervals:List<StepIntervalEntity> = emptyList(),val daily:List<DailyPoint> = emptyList(),val timeOfDay:List<TimePoint> = emptyList(),val weights:List<WeightEntry> = emptyList(),val summary:Summary?=null,val tab:Int=0)
 
 class AppViewModel(private val app:StepsTrackerApp):ViewModel() {
-    private val mutable=MutableStateFlow(UiState(loggedIn=app.session.isLoggedIn));val state=mutable.asStateFlow()
+    private val mutable=MutableStateFlow(UiState(loggedIn=app.session.isLoggedIn,serverUrl=app.server.baseUrl));val state=mutable.asStateFlow()
     init {
         viewModelScope.launch { app.steps.observeDay(LocalDate.now()).collect { values->mutable.update { it.copy(intervals=values) } } }
         if(app.session.isLoggedIn)refresh()
     }
-    fun auth(email:String,password:String,register:Boolean)=launch { if(register)app.api.register(email,password)else app.api.login(email,password);mutable.update { it.copy(loggedIn=true) };refresh() }
+    fun auth(email:String,password:String,register:Boolean,serverUrl:String)=launch { switchServer(serverUrl);if(register)app.api.register(email,password)else app.api.login(email,password);mutable.update { it.copy(loggedIn=true,serverUrl=app.server.baseUrl) };refresh() }
     fun refresh()=launch {
         if(!app.session.isLoggedIn)return@launch
         val me=app.api.me();mutable.update { it.copy(me=me) }
-        val today=LocalDate.now();val intervals=app.steps.observeDay(today).first();val daily=if(me.profile!=null)app.api.daily(today.minusDays(29).toString(),today.toString())else emptyList();val time=if(me.profile!=null)app.api.timeOfDay(today.minusDays(29).toString(),today.toString())else emptyList();val summary=if(me.profile!=null)app.api.summary(today.minusDays(6).toString(),today.toString())else null
-        runCatching { app.steps.sync() };mutable.update { it.copy(intervals=intervals,daily=daily,timeOfDay=time,summary=summary) }
+        val today=LocalDate.now();val intervals=app.steps.observeDay(today).first();val daily=if(me.profile!=null)app.api.daily(today.minusDays(29).toString(),today.toString())else emptyList();val time=if(me.profile!=null)app.api.timeOfDay(today.minusDays(29).toString(),today.toString())else emptyList();val weights=if(me.profile!=null)app.api.weightHistory()else emptyList();val summary=if(me.profile!=null)app.api.summary(today.minusDays(6).toString(),today.toString())else null
+        runCatching { app.steps.sync() };mutable.update { it.copy(intervals=intervals,daily=daily,timeOfDay=time,weights=weights,summary=summary) }
     }
     fun profile(weight:Double,height:Double,birth:String,sex:String)=launch { app.api.profile(ProfileRequest(weight,height,birth,sex,ZoneId.systemDefault().id));refresh() }
-    fun logout()=launch { app.api.logout();mutable.value=UiState() }
-    fun delete()=launch { app.api.deleteAccount();app.database.intervals().clear();mutable.value=UiState() }
+    fun logout()=launch { app.api.logout();mutable.value=UiState(serverUrl=app.server.baseUrl) }
+    fun delete()=launch { app.api.deleteAccount();app.database.intervals().clear();mutable.value=UiState(serverUrl=app.server.baseUrl) }
+    fun changeServer(value:String)=launch { switchServer(value);mutable.value=UiState(serverUrl=app.server.baseUrl) }
+    private suspend fun switchServer(value:String) { if(app.server.save(value)){app.session.clear();app.database.intervals().clear()} }
     fun tab(value:Int){mutable.update { it.copy(tab=value) }}
     private fun launch(block:suspend()->Unit)=viewModelScope.launch { mutable.update { it.copy(loading=true,error=null) };runCatching { block() }.onFailure { e->mutable.update { it.copy(error=e.message) } };mutable.update { it.copy(loading=false) } }
     companion object { fun factory(app:StepsTrackerApp)=object:ViewModelProvider.Factory { override fun <T:ViewModel> create(c:Class<T>):T=AppViewModel(app) as T } }
@@ -77,15 +82,18 @@ class AppViewModel(private val app:StepsTrackerApp):ViewModel() {
     }
 }
 
-@Composable private fun AuthScreen(state:UiState,onSubmit:(String,String,Boolean)->Unit) {
-    var email by remember{mutableStateOf("")};var password by remember{mutableStateOf("")};var register by remember{mutableStateOf(false)}
+@Composable private fun AuthScreen(state:UiState,onSubmit:(String,String,Boolean,String)->Unit) {
+    var email by remember{mutableStateOf("")};var password by remember{mutableStateOf("")};var confirmation by remember{mutableStateOf("")};var register by remember{mutableStateOf(false)};var serverUrl by remember(state.serverUrl){mutableStateOf(state.serverUrl)}
     Column(Modifier.fillMaxSize().padding(24.dp),verticalArrangement=Arrangement.Center) {
-        Icon(Icons.Default.DirectionsWalk,null,Modifier.size(56.dp),tint=MaterialTheme.colorScheme.primary)
+        Image(painterResource(R.drawable.stepstracker_logo),"StepsTracker logo",Modifier.size(72.dp))
         Text("StepsTracker",style=MaterialTheme.typography.headlineLarge,fontWeight=FontWeight.Bold);Text(if(register)"Create your account" else "Welcome back",color=MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.height(16.dp));OutlinedTextField(serverUrl,{serverUrl=it},Modifier.fillMaxWidth(),label={Text("Server URL")},supportingText={Text("Example: http://192.168.1.10:8080/")},singleLine=true)
         Spacer(Modifier.height(24.dp));OutlinedTextField(email,{email=it},Modifier.fillMaxWidth(),label={Text("Email")},singleLine=true)
         Spacer(Modifier.height(12.dp));OutlinedTextField(password,{password=it},Modifier.fillMaxWidth(),label={Text("Password")},visualTransformation=PasswordVisualTransformation(),singleLine=true)
+        if(register) { Spacer(Modifier.height(12.dp));OutlinedTextField(confirmation,{confirmation=it},Modifier.fillMaxWidth(),label={Text("Confirm password")},visualTransformation=PasswordVisualTransformation(),singleLine=true) }
+        if(register&&confirmation.isNotEmpty()&&password!=confirmation)Text("Passwords do not match",color=MaterialTheme.colorScheme.error)
         state.error?.let { Text(it,color=MaterialTheme.colorScheme.error,modifier=Modifier.padding(top=8.dp)) }
-        Button({onSubmit(email,password,register)},Modifier.fillMaxWidth().padding(top=20.dp),enabled=!state.loading&&email.isNotBlank()&&password.length>=10) { Text(if(register)"Sign up" else "Sign in") }
+        Button({onSubmit(email,password,register,serverUrl)},Modifier.fillMaxWidth().padding(top=20.dp),enabled=!state.loading&&serverUrl.isNotBlank()&&email.isNotBlank()&&password.length>=10&&(!register||password==confirmation)) { Text(if(register)"Sign up" else "Sign in") }
         TextButton({register=!register},Modifier.align(Alignment.CenterHorizontally)) { Text(if(register)"Already have an account? Sign in" else "Don't have an account? Sign up") }
     }
 }
@@ -137,13 +145,17 @@ class AppViewModel(private val app:StepsTrackerApp):ViewModel() {
 @Composable private fun StepChart(points:List<DailyPoint>,modifier:Modifier) { val primary=MaterialTheme.colorScheme.primary;Canvas(modifier) { if(points.isEmpty())return@Canvas;val max=points.maxOf { it.steps }.coerceAtLeast(1);val dx=size.width/(points.size.coerceAtLeast(2)-1);points.zipWithNext().forEachIndexed { i,(a,b)->drawLine(primary,Offset(i*dx,size.height-a.steps.toFloat()/max*size.height),Offset((i+1)*dx,size.height-b.steps.toFloat()/max*size.height),5f) } } }
 @Composable private fun QuarterChart(points:List<TimePoint>,modifier:Modifier) { val color=MaterialTheme.colorScheme.secondary;Canvas(modifier) { val max=(points.maxOfOrNull { it.steps } ?: 1.0).coerceAtLeast(1.0);points.forEach { p->val x=p.quarterHour/96f*size.width;drawLine(color,Offset(x,size.height),Offset(x,size.height-(p.steps/max*size.height).toFloat()),size.width/110) } } }
 
-@Composable private fun ProfileScreen(state:UiState,model:AppViewModel) { var confirm by remember{mutableStateOf(false)};var edit by remember{mutableStateOf(false)};Column(Modifier.fillMaxSize().padding(20.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
+@Composable private fun ProfileScreen(state:UiState,model:AppViewModel) { var confirm by remember{mutableStateOf(false)};var edit by remember{mutableStateOf(false)};var editServer by remember{mutableStateOf(false)};Column(Modifier.fillMaxSize().padding(20.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
     Text("Profile",style=MaterialTheme.typography.headlineLarge,fontWeight=FontWeight.Bold);Text(state.me?.email.orEmpty());state.me?.profile?.let { Text("${it.weightKg} kg · ${it.heightCm} cm");Text("Time zone: ${it.timezone}") }
-    OutlinedButton({edit=true},Modifier.fillMaxWidth()) { Text("Edit physical data") };OutlinedButton(model::logout,Modifier.fillMaxWidth()) { Text("Sign out") };TextButton({confirm=true},Modifier.fillMaxWidth()) { Text("Delete account",color=MaterialTheme.colorScheme.error) }
+    if(state.weights.isNotEmpty()) { Text("Weight history",fontWeight=FontWeight.Bold);state.weights.take(5).forEach { Text("${it.weightKg} kg · ${it.effectiveAt.take(10)}",color=MaterialTheme.colorScheme.onSurfaceVariant) } }
+    Text("Server: ${state.serverUrl}",color=MaterialTheme.colorScheme.onSurfaceVariant);OutlinedButton({editServer=true},Modifier.fillMaxWidth()) { Text("Change server") };OutlinedButton({edit=true},Modifier.fillMaxWidth()) { Text("Edit physical data") };OutlinedButton(model::logout,Modifier.fillMaxWidth()) { Text("Sign out") };TextButton({confirm=true},Modifier.fillMaxWidth()) { Text("Delete account",color=MaterialTheme.colorScheme.error) }
     if(confirm)AlertDialog({confirm=false},{Button({model.delete();confirm=false}){Text("Delete")}},dismissButton={TextButton({confirm=false}){Text("Cancel")}},title={Text("Delete account?")},text={Text("All data will be permanently deleted.")})
     if(edit)EditProfileDialog(state.me!!.profile!!,{edit=false}) { weight,height->val p=state.me.profile!!;model.profile(weight,height,p.birthDate,p.sex);edit=false }
+    if(editServer)ServerDialog(state.serverUrl,{editServer=false}) { model.changeServer(it);editServer=false }
 } }
+
+@Composable private fun ServerDialog(current:String,onDismiss:()->Unit,onSave:(String)->Unit) { var value by remember{mutableStateOf(current)};AlertDialog(onDismiss,{Button({onSave(value)},enabled=value.isNotBlank()){Text("Save and sign out")}},dismissButton={TextButton(onDismiss){Text("Cancel")}},title={Text("Server URL")},text={OutlinedTextField(value,{value=it},singleLine=true,label={Text("Base URL")},supportingText={Text("Changing server clears the local session and cache.")})}) }
 
 @Composable private fun EditProfileDialog(profile:Profile,onDismiss:()->Unit,onSave:(Double,Double)->Unit) { var weight by remember{mutableStateOf(profile.weightKg.toString())};var height by remember{mutableStateOf(profile.heightCm.toString())};AlertDialog(onDismiss,{Button({onSave(weight.toDouble(),height.toDouble())},enabled=weight.toDoubleOrNull()!=null&&height.toDoubleOrNull()!=null){Text("Save")}},dismissButton={TextButton(onDismiss){Text("Cancel")}},title={Text("Physical data")},text={Column(verticalArrangement=Arrangement.spacedBy(8.dp)){OutlinedTextField(weight,{weight=it},label={Text("Weight (kg)")});OutlinedTextField(height,{height=it},label={Text("Height (cm)")})}}) }
 
-@Composable private fun StepsTheme(content: @Composable () -> Unit) { MaterialTheme(colorScheme=lightColorScheme(primary=Color(0xFF006C4C),secondary=Color(0xFF4D6358),surface=Color(0xFFF8FBF8)),content=content) }
+@Composable private fun StepsTheme(content: @Composable () -> Unit) { val colors=if(isSystemInDarkTheme())darkColorScheme(primary=Color(0xFF62DDA8),secondary=Color(0xFFB4CCBE),surface=Color(0xFF101512),background=Color(0xFF101512))else lightColorScheme(primary=Color(0xFF006C4C),secondary=Color(0xFF4D6358),surface=Color(0xFFF8FBF8));MaterialTheme(colorScheme=colors,content=content) }

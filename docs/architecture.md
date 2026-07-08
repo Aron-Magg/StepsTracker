@@ -4,9 +4,10 @@ The app records 15-minute UTC intervals in Room and sends them as idempotent bat
 
 The backend calculates distance and calories, so the client is not authoritative for these values. Estimated stride length is `height × 0.413` for a `FEMALE` profile and `height × 0.415` otherwise. Estimated energy expenditure is `km × weight_kg × 0.75`. These are non-medical approximations.
 
+Every weight change is stored with an effective timestamp. New intervals use the weight that was effective when the activity occurred. Updating the profile never recalculates previously stored calorie estimates.
+
 Persisted timestamps use UTC. Daily queries convert intervals to the IANA time zone stored in the profile, correctly accounting for daylight-saving changes.
 
 ## MVP limitations
 
 The sensor fallback collects steps while the app is active. Health Connect remains the reliable path for historical and background collection. Continuous sensor collection would require a foreground service and its mandatory persistent Android notification.
-
