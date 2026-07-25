@@ -12,28 +12,65 @@ import androidx.health.connect.client.request.AggregateGroupByDurationRequest
 import androidx.health.connect.client.time.TimeRangeFilter
 import com.stepstracker.android.data.StepsRepository
 import com.stepstracker.android.data.IntervalMath
+import com.stepstracker.android.data.TrackingPreference
+import com.stepstracker.android.data.TrackingSettings
 import kotlinx.coroutines.*
 import java.time.*
 
 enum class TrackingSource { HEALTH_CONNECT, STEP_COUNTER, UNAVAILABLE }
 
-class StepTrackingManager(private val context:Context,private val repository:StepsRepository) : SensorEventListener {
+// Turns a raw TYPE_STEP_COUNTER reading (cumulative since boot) into per-interval deltas, persisting the
+// baseline so foreground and background samples share the same state. Reused by the live listener and the
+// background worker so the widget can update without the app being open.
+class StepCounterAccumulator(context:Context,private val repository:StepsRepository) {
+    private val prefs=context.getSharedPreferences("step-counter",Context.MODE_PRIVATE)
+    suspend fun record(current:Long) {
+        val bootMillis=System.currentTimeMillis()-android.os.SystemClock.elapsedRealtime()
+        val previous=if(prefs.contains("reading"))prefs.getLong("reading",current) else null
+        val reset=kotlin.math.abs(bootMillis-prefs.getLong("boot",bootMillis))>5000
+        val bootedToday=Instant.ofEpochMilli(bootMillis).atZone(ZoneId.systemDefault()).toLocalDate()==LocalDate.now()
+        val delta=IntervalMath.stepCounterDelta(previous,current,reset,bootedToday)
+        prefs.edit().putLong("reading",current).putLong("boot",bootMillis).apply()
+        if(delta>0)repository.store("STEP_COUNTER",Instant.now(),delta)
+    }
+}
+
+// Registers the step counter, waits for a single reading, then unregisters. Used by the background worker.
+suspend fun sampleStepCounter(context:Context,repository:StepsRepository) {
+    if(ContextCompat.checkSelfPermission(context,Manifest.permission.ACTIVITY_RECOGNITION)!=PackageManager.PERMISSION_GRANTED)return
+    val sensorManager=context.getSystemService(SensorManager::class.java) ?: return
+    val sensor=sensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER) ?: return
+    val value=suspendCancellableCoroutine<Long?> { cont->
+        val listener=object:SensorEventListener {
+            override fun onSensorChanged(event:SensorEvent) { sensorManager.unregisterListener(this);if(cont.isActive)cont.resumeWith(Result.success(event.values.firstOrNull()?.toLong())) }
+            override fun onAccuracyChanged(s:Sensor?,a:Int)=Unit
+        }
+        cont.invokeOnCancellation { sensorManager.unregisterListener(listener) }
+        if(!sensorManager.registerListener(listener,sensor,SensorManager.SENSOR_DELAY_FASTEST) && cont.isActive)cont.resumeWith(Result.success(null))
+    }
+    if(value!=null)StepCounterAccumulator(context,repository).record(value)
+}
+
+class StepTrackingManager(private val context:Context,private val repository:StepsRepository,private val settings:TrackingSettings) : SensorEventListener {
     private val scope=CoroutineScope(SupervisorJob()+Dispatchers.IO)
     private val sensorManager=context.getSystemService(SensorManager::class.java)
-    private val prefs=context.getSharedPreferences("step-counter",Context.MODE_PRIVATE)
+    private val accumulator=StepCounterAccumulator(context,repository)
     var source:TrackingSource=TrackingSource.UNAVAILABLE;private set
 
     suspend fun start():TrackingSource {
         stopSensor()
-        val status=HealthConnectClient.getSdkStatus(context)
-        if(status==HealthConnectClient.SDK_AVAILABLE) {
-            val client=HealthConnectClient.getOrCreate(context)
-            val permission=HealthPermission.getReadPermission(StepsRecord::class)
-            if(client.permissionController.getGrantedPermissions().contains(permission)) {
-                source=TrackingSource.HEALTH_CONNECT;HealthConnectImporter.importAvailable(context,repository);return source
+        val preference=settings.preference
+        if(preference!=TrackingPreference.DEVICE_SENSOR && HealthConnectClient.getSdkStatus(context)==HealthConnectClient.SDK_AVAILABLE) {
+            val granted=runCatching {
+                val client=HealthConnectClient.getOrCreate(context)
+                val permission=HealthPermission.getReadPermission(StepsRecord::class)
+                client.permissionController.getGrantedPermissions().contains(permission)
+            }.getOrDefault(false)
+            if(granted) {
+                source=TrackingSource.HEALTH_CONNECT;runCatching { HealthConnectImporter.importAvailable(context,repository) };return source
             }
         }
-        if(ContextCompat.checkSelfPermission(context,Manifest.permission.ACTIVITY_RECOGNITION)==PackageManager.PERMISSION_GRANTED) {
+        if(preference!=TrackingPreference.HEALTH_CONNECT && ContextCompat.checkSelfPermission(context,Manifest.permission.ACTIVITY_RECOGNITION)==PackageManager.PERMISSION_GRANTED) {
             val sensor=sensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER)
             if(sensor!=null && sensorManager.registerListener(this,sensor,SensorManager.SENSOR_DELAY_NORMAL)) { source=TrackingSource.STEP_COUNTER;return source }
         }
@@ -44,11 +81,7 @@ class StepTrackingManager(private val context:Context,private val repository:Ste
 
     override fun onSensorChanged(event:SensorEvent) {
         val current=event.values.firstOrNull()?.toLong() ?: return
-        val previous=prefs.getLong("reading",current);val previousBoot=prefs.getLong("boot",android.os.SystemClock.elapsedRealtime())
-        val reset=current<previous || android.os.SystemClock.elapsedRealtime()<previousBoot
-        val delta=IntervalMath.sensorDelta(previous,current,reset)
-        prefs.edit().putLong("reading",current).putLong("boot",android.os.SystemClock.elapsedRealtime()).apply()
-        if(delta>0)scope.launch { repository.store("STEP_COUNTER",Instant.now(),delta) }
+        scope.launch { accumulator.record(current) }
     }
     override fun onAccuracyChanged(sensor:Sensor?,accuracy:Int)=Unit
     fun stopSensor()=sensorManager.unregisterListener(this)

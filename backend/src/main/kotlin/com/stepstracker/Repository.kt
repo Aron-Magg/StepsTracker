@@ -15,20 +15,29 @@ class Repository(private val db: Database, private val security: Security, priva
             val userId=UUID.nameUUIDFromBytes("stepstracker-demo-user".toByteArray())
             val deviceId=UUID.nameUUIDFromBytes("stepstracker-demo-device".toByteArray())
             val now=Instant.now();val zone=ZoneId.of("Europe/Zurich");val today=LocalDate.now(zone);val firstDay=today.minusMonths(2)
-            c.prepareStatement("INSERT INTO users(id,email,password_hash,created_at,updated_at) VALUES (?,? ,?, ?,?) ON CONFLICT(email) DO NOTHING").use { p->p.setObject(1,userId);p.setString(2,"demo@example.com");p.setString(3,security.hashPassword("demo"));p.setObject(4,firstDay.atStartOfDay(zone).toOffsetDateTime());p.setObject(5,now.atOffset(ZoneOffset.UTC));p.executeUpdate() }
+            c.prepareStatement("INSERT INTO users(id,email,password_hash,created_at,updated_at) VALUES (?,? ,?, ?,?) ON CONFLICT(email) DO NOTHING").use { p->p.setObject(1,userId);p.setString(2,"demo@example.com");p.setString(3,security.hashPassword("demopassword123"));p.setObject(4,firstDay.atStartOfDay(zone).toOffsetDateTime());p.setObject(5,now.atOffset(ZoneOffset.UTC));p.executeUpdate() }
             c.prepareStatement("INSERT INTO user_profiles(user_id,weight_kg,height_cm,birth_date,sex,timezone) VALUES (?,75,178,'1990-01-01','OTHER','Europe/Zurich') ON CONFLICT(user_id) DO NOTHING").use { p->p.setObject(1,userId);p.executeUpdate() }
             c.prepareStatement("INSERT INTO user_weight_history(user_id,weight_kg,effective_at) VALUES (?,75,?) ON CONFLICT(user_id,effective_at) DO NOTHING").use { p->p.setObject(1,userId);p.setObject(2,firstDay.atStartOfDay(zone).toOffsetDateTime());p.executeUpdate() }
             c.prepareStatement("INSERT INTO devices(id,user_id,platform,model,last_sync_at) VALUES (?,?,'ANDROID','Demo device',now()) ON CONFLICT(id,user_id) DO NOTHING").use { p->p.setObject(1,deviceId);p.setObject(2,userId);p.executeUpdate() }
-            val stride=1.78*0.415;val slots=listOf(8 to 0.20,12 to 0.35,17 to 0.30,20 to 0.15)
+            val stride=1.78*0.415;val random=kotlin.random.Random(20240601L)
+            // Relative activity per hour of day: morning routine, commute peaks, lunch, evening.
+            val hourWeight={ h:Int->when(h){6->0.4;7->1.2;8->2.0;9->1.0;10->0.8;11->0.9;12->1.6;13->1.3;14->0.7;15->0.7;16->0.9;17->1.8;18->2.2;19->1.5;20->1.0;21->0.7;22->0.3;else->0.0} }
             c.prepareStatement("INSERT INTO step_intervals(id,user_id,device_id,source,interval_start,interval_end,steps,distance_m_estimated,calories_kcal_estimated) VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id,device_id,interval_start) DO NOTHING").use { p->
-                var day=firstDay;var index=0
+                var day=firstDay
                 while(!day.isAfter(today)) {
-                    val total=2500+(index*791%6500)
-                    slots.forEachIndexed { slotIndex,(hour,ratio)->
-                        val start=day.atTime(hour,0).atZone(zone).toInstant();val steps=if(slotIndex==slots.lastIndex)total-slots.dropLast(1).sumOf { (total*it.second).toInt() } else (total*ratio).toInt();val distance=steps*stride
-                        p.setObject(1,UUID.nameUUIDFromBytes("demo:$day:$hour".toByteArray()));p.setObject(2,userId);p.setObject(3,deviceId);p.setString(4,"HEALTH_CONNECT");p.setObject(5,start.atOffset(ZoneOffset.UTC));p.setObject(6,start.plusSeconds(900).atOffset(ZoneOffset.UTC));p.setInt(7,steps);p.setDouble(8,distance);p.setDouble(9,distance/1000*75*0.75);p.addBatch()
+                    val weekend=day.dayOfWeek==DayOfWeek.SATURDAY||day.dayOfWeek==DayOfWeek.SUNDAY
+                    val baseline=if(weekend)8500 else 9800
+                    // ~8% of days are low-activity rest days; otherwise the total varies smoothly around the baseline.
+                    val total=if(random.nextDouble()<0.08)(1000+random.nextDouble()*2000).toInt() else (baseline*(0.65+random.nextDouble()*0.6)).toInt()
+                    // Spread the day's steps across waking quarter-hours (06:00–22:45) following the activity curve plus jitter.
+                    val weights=(24..91).map { q->q to hourWeight(q/4)*(0.5+random.nextDouble()) }.filter { it.second>0 }
+                    val sum=weights.sumOf { it.second }
+                    weights.forEach { (q,w)->
+                        val steps=(total*w/sum).toInt();if(steps<=0)return@forEach
+                        val start=day.atTime(q/4,(q%4)*15).atZone(zone).toInstant();val distance=steps*stride
+                        p.setObject(1,UUID.nameUUIDFromBytes("demo:$day:$q".toByteArray()));p.setObject(2,userId);p.setObject(3,deviceId);p.setString(4,"HEALTH_CONNECT");p.setObject(5,start.atOffset(ZoneOffset.UTC));p.setObject(6,start.plusSeconds(900).atOffset(ZoneOffset.UTC));p.setInt(7,steps);p.setDouble(8,distance);p.setDouble(9,distance/1000*75*0.75);p.addBatch()
                     }
-                    day=day.plusDays(1);index++
+                    day=day.plusDays(1)
                 }
                 p.executeBatch()
             }
@@ -90,6 +99,14 @@ class Repository(private val db: Database, private val security: Security, priva
         }
         if(previousWeight == null || kotlin.math.abs(previousWeight-value.weightKg) >= 0.005) {
             c.prepareStatement("INSERT INTO user_weight_history(user_id,weight_kg,effective_at) VALUES (?,?,now())").use { p->p.setObject(1,userId);p.setDouble(2,value.weightKg);p.executeUpdate() }
+            // "Last measurement of the day": the new weight is the most recent one, so recompute calories for every
+            // interval from the start of today (in the user's timezone) onward using it. Earlier days keep the
+            // weight that was effective when they were ingested (weightAt), so their calories stay historically correct.
+            val zone=runCatching { ZoneId.of(value.timezone) }.getOrDefault(ZoneOffset.UTC)
+            val dayStart=LocalDate.now(zone).atStartOfDay(zone).toOffsetDateTime()
+            c.prepareStatement("UPDATE step_intervals SET calories_kcal_estimated=distance_m_estimated/1000*?*0.75,updated_at=now() WHERE user_id=? AND interval_start>=?").use { p->
+                p.setDouble(1,value.weightKg);p.setObject(2,userId);p.setObject(3,dayStart);p.executeUpdate()
+            }
         }
     }
 
@@ -97,6 +114,38 @@ class Repository(private val db: Database, private val security: Security, priva
 
     private fun weightAt(c:Connection,userId:UUID,instant:Instant,fallback:Double):Double = c.prepareStatement("SELECT weight_kg FROM user_weight_history WHERE user_id=? AND effective_at<=? ORDER BY effective_at DESC LIMIT 1").use { p->
         p.setObject(1,userId);p.setObject(2,instant.atOffset(ZoneOffset.UTC));p.executeQuery().use { r->if(r.next())r.getDouble(1) else fallback }
+    }
+
+    // Remove a mistaken weigh-in and repair the timeline: the segment [deleted, nextEntry) now uses whatever weight
+    // was effective just before it (or the profile weight), so recompute those intervals' calories. Also keep the
+    // profile's current weight pointing at the latest remaining entry.
+    // Edit a weigh-in's value: the segment [effectiveAt, nextEntry) is governed by it, so recompute those
+    // intervals' calories with the new weight, and keep the profile's current weight at the latest entry.
+    fun updateWeight(userId:UUID, effectiveAt:Instant, weightKg:Double):Boolean = db.transaction { c ->
+        val at=effectiveAt.atOffset(ZoneOffset.UTC)
+        val updated=c.prepareStatement("UPDATE user_weight_history SET weight_kg=? WHERE user_id=? AND effective_at=?").use { p->p.setDouble(1,weightKg);p.setObject(2,userId);p.setObject(3,at);p.executeUpdate() }
+        if(updated==0) return@transaction false
+        val next=c.prepareStatement("SELECT min(effective_at) FROM user_weight_history WHERE user_id=? AND effective_at>?").use { p->p.setObject(1,userId);p.setObject(2,at);p.executeQuery().use { r->if(r.next())r.getObject(1,OffsetDateTime::class.java) else null } }
+        val sql=StringBuilder("UPDATE step_intervals SET calories_kcal_estimated=distance_m_estimated/1000*?*0.75,updated_at=now() WHERE user_id=? AND interval_start>=?")
+        if(next!=null)sql.append(" AND interval_start<?")
+        c.prepareStatement(sql.toString()).use { p->p.setDouble(1,weightKg);p.setObject(2,userId);p.setObject(3,at);if(next!=null)p.setObject(4,next);p.executeUpdate() }
+        c.prepareStatement("SELECT weight_kg FROM user_weight_history WHERE user_id=? ORDER BY effective_at DESC LIMIT 1").use { p->p.setObject(1,userId);p.executeQuery().use { r->if(r.next()){ val latest=r.getDouble(1);c.prepareStatement("UPDATE user_profiles SET weight_kg=?,updated_at=now() WHERE user_id=?").use { u->u.setDouble(1,latest);u.setObject(2,userId);u.executeUpdate() } } } }
+        true
+    }
+
+    fun deleteWeight(userId:UUID, effectiveAt:Instant):Boolean = db.transaction { c ->
+        val at=effectiveAt.atOffset(ZoneOffset.UTC)
+        val fallback=profile(userId)?.weightKg ?: 0.0
+        val prevWeight=c.prepareStatement("SELECT weight_kg FROM user_weight_history WHERE user_id=? AND effective_at<? ORDER BY effective_at DESC LIMIT 1").use { p->p.setObject(1,userId);p.setObject(2,at);p.executeQuery().use { r->if(r.next())r.getDouble(1) else null } }
+        val next=c.prepareStatement("SELECT min(effective_at) FROM user_weight_history WHERE user_id=? AND effective_at>?").use { p->p.setObject(1,userId);p.setObject(2,at);p.executeQuery().use { r->if(r.next())r.getObject(1,OffsetDateTime::class.java) else null } }
+        val deleted=c.prepareStatement("DELETE FROM user_weight_history WHERE user_id=? AND effective_at=?").use { p->p.setObject(1,userId);p.setObject(2,at);p.executeUpdate() }
+        if(deleted==0) return@transaction false
+        val effWeight=prevWeight ?: fallback
+        val sql=StringBuilder("UPDATE step_intervals SET calories_kcal_estimated=distance_m_estimated/1000*?*0.75,updated_at=now() WHERE user_id=? AND interval_start>=?")
+        if(next!=null)sql.append(" AND interval_start<?")
+        c.prepareStatement(sql.toString()).use { p->p.setDouble(1,effWeight);p.setObject(2,userId);p.setObject(3,at);if(next!=null)p.setObject(4,next);p.executeUpdate() }
+        c.prepareStatement("SELECT weight_kg FROM user_weight_history WHERE user_id=? ORDER BY effective_at DESC LIMIT 1").use { p->p.setObject(1,userId);p.executeQuery().use { r->if(r.next()){ val latest=r.getDouble(1);c.prepareStatement("UPDATE user_profiles SET weight_kg=?,updated_at=now() WHERE user_id=?").use { u->u.setDouble(1,latest);u.setObject(2,userId);u.executeUpdate() } } } }
+        true
     }
 
     fun deleteUser(userId: UUID) = db.query { c -> c.prepareStatement("DELETE FROM users WHERE id=?").use { p -> p.setObject(1,userId); p.executeUpdate() } }

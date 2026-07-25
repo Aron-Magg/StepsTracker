@@ -45,6 +45,8 @@ class ApiClient(private val session: SessionStore,private val server:ServerSetti
     suspend fun me()=request<Me>("api/v1/me")
     suspend fun profile(value:ProfileRequest)=request<Profile>("api/v1/me/profile") { method=HttpMethod.Put;contentType(ContentType.Application.Json);setBody(value) }
     suspend fun weightHistory()=request<List<WeightEntry>>("api/v1/me/weight-history")
+    suspend fun deleteWeight(effectiveAt:String) { request<Unit>("api/v1/me/weight-history?effectiveAt=${effectiveAt.encodeURLParameter()}") { method=HttpMethod.Delete } }
+    suspend fun updateWeight(effectiveAt:String,weightKg:Double) { request<Unit>("api/v1/me/weight-history?effectiveAt=${effectiveAt.encodeURLParameter()}&weightKg=$weightKg") { method=HttpMethod.Put } }
     suspend fun upload(value:UploadBatch)=request<BatchResult>("api/v1/steps/batch") { method=HttpMethod.Post;contentType(ContentType.Application.Json);setBody(value) }
     suspend fun daily(from:String,to:String)=request<List<DailyPoint>>("api/v1/stats/daily?from=$from&to=$to")
     suspend fun timeOfDay(from:String,to:String)=request<List<TimePoint>>("api/v1/stats/time-of-day?from=$from&to=$to")

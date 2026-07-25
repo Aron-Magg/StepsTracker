@@ -6,6 +6,8 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.os.Bundle
+import android.view.View
 import android.widget.RemoteViews
 import com.stepstracker.android.MainActivity
 import com.stepstracker.android.R
@@ -17,7 +19,12 @@ import java.time.LocalDate
 import java.time.ZoneId
 
 class StepWidgetProvider:AppWidgetProvider() {
-    override fun onUpdate(context:Context,manager:AppWidgetManager,ids:IntArray) {
+    override fun onUpdate(context:Context,manager:AppWidgetManager,ids:IntArray)=render(context,manager,ids)
+
+    override fun onAppWidgetOptionsChanged(context:Context,manager:AppWidgetManager,id:Int,newOptions:Bundle)=render(context,manager,intArrayOf(id))
+
+    private fun render(context:Context,manager:AppWidgetManager,ids:IntArray) {
+        if(ids.isEmpty())return
         val pending=goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
@@ -25,8 +32,12 @@ class StepWidgetProvider:AppWidgetProvider() {
                 val from=day.atStartOfDay(zone).toInstant().toEpochMilli();val to=day.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
                 val steps=(context.applicationContext as StepsTrackerApp).database.intervals().total(from,to)
                 ids.forEach { id->
+                    val minWidth=manager.getAppWidgetOptions(id).getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH,110)
+                    val compact=minWidth<110
                     val views=RemoteViews(context.packageName,R.layout.step_widget).apply {
                         setTextViewText(R.id.widget_steps,steps.toString())
+                        setViewVisibility(R.id.widget_icon,if(compact)View.GONE else View.VISIBLE)
+                        setViewVisibility(R.id.widget_label,if(minWidth<70)View.GONE else View.VISIBLE)
                         setOnClickPendingIntent(R.id.widget_root,PendingIntent.getActivity(context,0,Intent(context,MainActivity::class.java),PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
                     }
                     manager.updateAppWidget(id,views)
@@ -44,4 +55,3 @@ class StepWidgetProvider:AppWidgetProvider() {
         }
     }
 }
-

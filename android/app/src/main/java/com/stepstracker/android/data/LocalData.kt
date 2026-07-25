@@ -22,6 +22,10 @@ interface StepIntervalDao {
     fun observe(from: Long, to: Long): Flow<List<StepIntervalEntity>>
     @Query("SELECT COALESCE(SUM(steps),0) FROM step_intervals WHERE intervalStart >= :from AND intervalStart < :to")
     suspend fun total(from:Long,to:Long):Int
+    @Query("SELECT * FROM step_intervals WHERE intervalStart >= :from AND intervalStart < :to")
+    suspend fun range(from:Long,to:Long):List<StepIntervalEntity>
+    @Query("SELECT MIN(intervalStart) FROM step_intervals")
+    suspend fun earliest():Long?
     @Query("SELECT * FROM step_intervals WHERE synced=0 ORDER BY intervalStart LIMIT :limit")
     suspend fun pending(limit: Int = 500): List<StepIntervalEntity>
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -37,7 +41,13 @@ interface StepIntervalDao {
         upsert(listOf(entity.copy(steps=(previous?.steps ?: 0)+entity.steps,synced=false)))
     }
     @Transaction
-    suspend fun replaceWithHealthConnect(entity:StepIntervalEntity) { upsert(listOf(entity)) }
+    suspend fun replaceWithHealthConnect(entity:StepIntervalEntity) {
+        // Health Connect re-imports the last 30 days on every run. Re-upserting an identical slot would reset
+        // synced=false and make already-uploaded intervals queue forever, so skip when the data is unchanged.
+        val previous=findAt(entity.intervalStart)
+        if(previous?.source=="HEALTH_CONNECT" && previous.steps==entity.steps) return
+        upsert(listOf(entity))
+    }
     @Query("UPDATE step_intervals SET synced=1 WHERE id IN (:ids)")
     suspend fun markSynced(ids: List<String>)
     @Query("DELETE FROM step_intervals")

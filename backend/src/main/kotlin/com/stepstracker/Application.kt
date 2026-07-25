@@ -86,6 +86,16 @@ fun Application.module(config: AppConfig = AppConfig()) {
                 route("/me") {
                     get { val id=call.userId(); val user=repository.userById(id)!!; call.respond(MeResponse(id.toString(),user.email,repository.profile(id))) }
                     get("/weight-history") { call.respond(repository.weightHistory(call.userId())) }
+                    delete("/weight-history") {
+                        val effectiveAt=Instant.parse(call.request.queryParameters["effectiveAt"] ?: throw IllegalArgumentException("effectiveAt is required"))
+                        if(repository.deleteWeight(call.userId(),effectiveAt)) call.respond(HttpStatusCode.NoContent) else call.respond(HttpStatusCode.NotFound, ErrorResponse("NOT_FOUND","Weight entry not found"))
+                    }
+                    put("/weight-history") {
+                        val effectiveAt=Instant.parse(call.request.queryParameters["effectiveAt"] ?: throw IllegalArgumentException("effectiveAt is required"))
+                        val weightKg=(call.request.queryParameters["weightKg"] ?: throw IllegalArgumentException("weightKg is required")).toDouble()
+                        require(weightKg in 20.0..400.0) { "weightKg out of range" }
+                        if(repository.updateWeight(call.userId(),effectiveAt,weightKg)) call.respond(HttpStatusCode.NoContent) else call.respond(HttpStatusCode.NotFound, ErrorResponse("NOT_FOUND","Weight entry not found"))
+                    }
                     put("/profile") {
                         val input=call.receive<ProfileRequest>(); validateProfile(input); repository.saveProfile(call.userId(),input); call.respond(repository.profile(call.userId())!!)
                     }

@@ -15,6 +15,15 @@ class SessionStore(context:Context) {
     fun clear()=prefs.edit().clear().apply()
 }
 
+enum class TrackingPreference { AUTO, HEALTH_CONNECT, DEVICE_SENSOR }
+
+class TrackingSettings(context:Context) {
+    private val prefs=context.getSharedPreferences("tracking-settings",Context.MODE_PRIVATE)
+    var preference:TrackingPreference
+        get()=runCatching { TrackingPreference.valueOf(prefs.getString("preference",TrackingPreference.AUTO.name)!!) }.getOrDefault(TrackingPreference.AUTO)
+        set(value){prefs.edit().putString("preference",value.name).apply()}
+}
+
 class ServerSettings(context:Context) {
     private val prefs=context.getSharedPreferences("server-settings",Context.MODE_PRIVATE)
     var baseUrl:String
