@@ -1,0 +1,44 @@
+command	category	module	platforms	description
+run	modifying	project	all	Start the local stack (API + PostgreSQL)
+setup	modifying	project	all	Install dependencies and prepare the project
+check	safe	project	all	Static checks (config + health)
+ci	safe	project	all	Full local pipeline (check + tests)
+status	safe	project	all	Show project and platform status
+platform	safe	project	all	Detect the current platform
+platforms	safe	project	all	List every supported platform
+health	safe	project	all	Check required tools for this platform
+health-all	safe	project	all	Check tools across all platforms
+cure-plan	safe	project	all	Show what cure would install (dry-run)
+cure	confirm	project	all	Install missing required tools
+doctor	safe	project	all	Full environment diagnostics
+pending	safe	project	all	Show detected-but-unavailable commands (background)
+version	safe	project	all	Show the project/template version
+config init	modifying	config	all	Create .env from .env.example
+config check	safe	config	all	Verify required env vars are set
+config diff	safe	config	all	Diff .env keys against .env.example
+db backup	modifying	db	all	Back up PostgreSQL into backups/db/
+db restore	confirm	db	all	Restore PostgreSQL from a dump file
+db reset	confirm	db	all	Drop containers + data volume (destructive)
+tests all	safe	tests	all	Run backend + Android test suites
+tests backend	safe	tests	all	Run only the backend JVM tests
+tests android	safe	tests	unix	Run only the Android JVM unit tests
+reports all	safe	reports	all	Generate every report
+mobile build	modifying	mobile	unix	Build the Android debug APK
+mobile install	modifying	mobile	unix	Build and install the debug APK on a device
+mobile install-lan	modifying	mobile	unix	Install a debug APK pointed at the LAN API
+mobile test	safe	mobile	unix	Run the Android JVM unit tests
+mobile clean	modifying	mobile	unix	Remove Android build artifacts
+stack lan-up	modifying	stack	unix	Start the local stack on the LAN (API on 0.0.0.0)
+stack down	modifying	stack	unix	Stop the local stack (DB volume preserved)
+stack build	modifying	stack	unix	Build the backend image + Android APK
+stack clean	modifying	stack	unix	Remove backend + Android build artifacts
+stack status	safe	stack	unix	Show local service status
+stack logs	safe	stack	unix	Follow stack logs (optional service)
+stack api-health	safe	stack	unix	Curl the local API health endpoint
+stack lan-ip	safe	stack	unix	Print the primary local IPv4 address
+stack backend-build	modifying	stack	unix	Build the backend Docker image
+stack backend-clean	modifying	stack	unix	Remove backend build artifacts
+stack prod-up	confirm	stack	unix	Start the production stack (Caddy + HTTPS)
+stack prod-down	modifying	stack	unix	Stop the production stack
+stack prod-status	safe	stack	unix	Show production stack status
+stack prod-logs	safe	stack	unix	Follow production stack logs

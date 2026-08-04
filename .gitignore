@@ -8,3 +8,15 @@ captures/
 backups/
 *.dump
 .DS_Store
+
+# --- JustfileConfigurator (auto-added) ---
+.env
+/backups/db/*
+!/backups/db/.gitkeep
+/reports/*
+!/reports/.gitkeep
+Justfile.bak
+
+# Local UI scratch / reference material (not part of the project)
+liquid-glass/
+liquid-glass-components.zip

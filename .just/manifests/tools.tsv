@@ -1,0 +1,12 @@
+command	arch	debian	macos	windows	required	platforms	description
+just	just	just	just	Casey.Just	required	arch,debian,macos,windows	Command runner used by every recipe
+bash	bash	bash	bash	-	required	arch,debian,macos	POSIX shell that runs the Unix recipes
+git	git	git	git	Git.Git	required	arch,debian,macos,windows	Version control
+docker	docker	docker.io	docker	Docker.DockerDesktop	required	arch,debian,macos,windows	Container runtime for the backend + PostgreSQL stack
+java	jdk17-openjdk	openjdk-17-jdk	openjdk@17	EclipseAdoptium.Temurin.17.JDK	required	arch,debian,macos,windows	JDK 17 for the Android Gradle wrapper
+adb	android-tools	adb	android-platform-tools	Google.PlatformTools	optional	arch,debian,macos,windows	Android Debug Bridge for device installs
+curl	curl	curl	curl	-	optional	arch,debian,macos	HTTP client for API health checks
+tar	tar	tar	gnu-tar	-	optional	arch,debian,macos	Archive packaging for backups and dist
+zip	zip	zip	zip	-	optional	arch,debian,macos	Zip packaging for backups and dist
+python	python	python3	python	Python.Python.3	optional	arch,debian,macos,windows	Static server for the docs dashboard
+powershell.exe|pwsh	-	-	-	Microsoft.PowerShell	required	windows	Shell that runs the Windows recipes

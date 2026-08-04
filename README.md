@@ -1,300 +1,279 @@
+<div align="center">
+
 # StepsTracker
+
+**Self-hosted step, run & weight tracking — your health data on your own server.**
 
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.1-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org/)
 [![Android](https://img.shields.io/badge/Android-9%2B-3DDC84?logo=android&logoColor=white)](https://developer.android.com/)
+[![Ktor](https://img.shields.io/badge/Ktor-3.1-087CFA?logo=ktor&logoColor=white)](https://ktor.io/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-**StepsTracker** is an open-source, self-hosted platform to collect, sync, and analyze the steps recorded by an Android phone. Your data stays under your control in a PostgreSQL database on your own infrastructure.
+StepsTracker collects the steps, runs and body-weight recorded on an Android phone,
+syncs them to a backend **you** host, and stores everything in a PostgreSQL database
+you control. No third-party cloud, no data brokers — just your numbers on your machine.
 
-## 🎯 Demo Account
+</div>
 
-Try the app with the preconfigured demo account:
+---
+
+## ✨ Highlights
+
+- 👟 **Automatic step tracking** via Health Connect, with a raw step-counter sensor fallback.
+- 🏃 **GPS run tracking** with a live map, pace/speed/distance and background recording (screen off).
+- ⚖️ **Weight history** with trend charts and personalized calorie estimation.
+- 📊 **Rich statistics** — daily average, all-time trend, and time-of-day distribution.
+- 🧩 **Home-screen widget** for a glance at today's steps.
+- 🔌 **Offline-first sync** — a local cache keeps working with no connection and reconciles later.
+- 🔐 **Self-hosted & private** — JWT auth, Argon2id password hashing, HTTPS in production.
+
+## 🎯 Demo account
+
+The pre-seeded demo account ships with **three months of sample data**, including weight
+history and a recorded run, so you can explore every screen immediately:
 
 ```
-Email: demo@example.com
+Email:    demo@example.com
 Password: demopassword123
 ```
 
-> The demo account includes the last 2 months of data for a full demonstration of the features.
-
 ## 📱 Screenshots
 
-### Dashboard and Statistics
-![Home Screen](docs/screenshots/home.png)
-*Main dashboard with daily step count and trend charts*
+<table>
+  <tr>
+    <td align="center"><img src="docs/screenshots/home.png" width="230" alt="Daily dashboard"/><br/><sub><b>Daily dashboard</b> — steps, distance & calories</sub></td>
+    <td align="center"><img src="docs/screenshots/statistics.png" width="230" alt="Statistics"/><br/><sub><b>Statistics</b> — trends & weight history</sub></td>
+    <td align="center"><img src="docs/screenshots/run-tracking.png" width="230" alt="Run tracking"/><br/><sub><b>Run tracking</b> — GPS route & pace</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/screenshots/profile.png" width="230" alt="Profile"/><br/><sub><b>Profile</b> — account, weight & data source</sub></td>
+    <td align="center"><img src="docs/screenshots/login.png" width="230" alt="Login"/><br/><sub><b>Login</b> — connect to your own server</sub></td>
+    <td align="center"><img src="docs/screenshots/registration.png" width="230" alt="Registration"/><br/><sub><b>Registration</b> — create an account</sub></td>
+  </tr>
+</table>
 
-![Statistics View](docs/screenshots/statistics.png)
-*Detailed statistics view with time-of-day distribution*
+<div align="center">
+  <img src="docs/screenshots/widget.png" width="360" alt="Home-screen widget"/><br/>
+  <sub><b>Home-screen widget</b> — today's steps at a glance</sub>
+</div>
 
-### Profile and Settings
-![Profile](docs/screenshots/profile.png)
-*User profile management with physical data for personalized calorie estimation*
+## 🚀 Features in detail
 
-![Settings](docs/screenshots/settings.png)
-*Server configuration and sync preferences*
+### 📊 Steps & statistics
+- **Health Connect integration** aggregates whole-day steps from any compatible source.
+- **Sensor fallback** reads the on-device `TYPE_STEP_COUNTER` when Health Connect is unavailable.
+- **15-minute intervals** stored in aligned UTC buckets for precise time-of-day analysis.
+- **Day navigation** to browse previous days with per-day distance and calorie estimates.
 
-### Widget and Notifications
-![Widget](docs/screenshots/widget.png)
-*Home screen widget for quick monitoring of synced steps*
+### 🏃 Run tracking
+- **Live GPS map** with route polyline, distance, elapsed time, current/average pace and speed.
+- **Background recording** via a foreground service — tracking continues with the screen off.
+- **Pause & resume**, then finish to sync the remaining GPS points automatically.
+- **Run history** with a per-run detail map, stats and calorie estimate.
 
-### Authentication
-![Login](docs/screenshots/login.png)
-*Login screen with support for custom servers*
+### ⚖️ Weight & calories
+- **Weight history** with an editable trend chart (add, edit or delete any point).
+- **Personalized calories** derived from the physical profile (weight, height) and activity.
 
-![Registration](docs/screenshots/registration.png)
-*New account registration*
-
-## 🚀 Key Features
-
-### 📊 Data Collection and Analysis
-- **Health Connect Integration**: Automatic step collection through the Health Connect API
-- **Sensor Fallback**: Uses `TYPE_STEP_COUNTER` when Health Connect is unavailable
-- **15-Minute Intervals**: Data aggregation into UTC intervals for detailed analysis
-- **Complete Statistics**: Daily view, weekly trends, and time-of-day distribution
-
-### 🔐 Security and Privacy
-- **Self-Hosted**: Full control of your data on your own server
-- **JWT Authentication**: Secure tokens with automatic refresh
-- **Argon2id**: Password hashing with a state-of-the-art algorithm
-- **HTTPS Only**: Encrypted communication in production
-
-### 💪 Advanced Features
-- **Offline Sync**: Local cache with Room and automatic sync via WorkManager
-- **Personalized Calorie Calculation**: Estimates based on the physical profile with weight history
-- **Home Screen Widget**: Quick view of the day's steps
-- **Day Navigation**: Browse previous days with per-day calorie estimates
-- **Dark Mode**: Automatic theme following the system settings
-- **Multi-Server**: Support for custom server URLs and reverse proxies
+### 🔐 Privacy & sync
+- **Self-hosted**: every byte lives on infrastructure you own.
+- **Offline-first**: a Room cache buffers data and syncs via WorkManager when back online.
+- **Secure by default**: JWT access/refresh tokens, Argon2id hashing, server-side rate limiting.
+- **Multi-server**: point the app at any server URL or reverse proxy.
 
 ## 🏗️ Architecture
 
 ```mermaid
 flowchart TB
-    subgraph Android App
-        HC[Health Connect API]
+    subgraph Android["📱 Android app (Kotlin / Compose)"]
+        HC[Health Connect]
         SC[Step Counter Sensor]
+        GPS[GPS / Run Service]
         UI[Compose UI]
-        ROOM[(Room Cache)]
-        WM[WorkManager]
+        ROOM[(Room cache)]
+        WM[WorkManager sync]
     end
-    
-    subgraph Backend
-        API[Ktor REST API]
-        AUTH[JWT Auth]
+
+    subgraph Backend["🖥️ Backend (Kotlin / Ktor)"]
+        API[REST API]
+        AUTH[JWT + Argon2id]
         DB[(PostgreSQL)]
     end
-    
-    subgraph Infrastructure
-        CADDY[Caddy]
+
+    subgraph Infra["🐳 Infrastructure"]
+        CADDY[Caddy · HTTPS]
         DOCKER[Docker Compose]
     end
-    
+
     HC --> ROOM
     SC -.fallback.-> ROOM
+    GPS --> ROOM
     UI --> ROOM
-    ROOM -->|Batch Sync| WM
+    ROOM -->|batch sync| WM
     WM -->|HTTPS| CADDY
     CADDY --> API
     API --> AUTH
     API --> DB
-    DOCKER --> API
-    DOCKER --> DB
-    DOCKER --> CADDY
+    DOCKER --- API & DB & CADDY
 ```
 
-## 📋 System Requirements
+## 🧰 Tech stack
 
-### For Development
-- **Docker** with Docker Compose v2
-- **[just](https://github.com/casey/just)** for development commands
-- **Android Studio** or Android SDK 36 + Java 17
-- **Git** for version control
+| Layer | Technology |
+|-------|-----------|
+| **Android** | Kotlin, Jetpack Compose, Health Connect, Room, WorkManager, Foreground Service (GPS) |
+| **Backend** | Kotlin, Ktor 3, JWT auth, Argon2id, rate limiting |
+| **Database** | PostgreSQL 17, Flyway migrations |
+| **Infra** | Docker Compose, Caddy (automatic HTTPS) |
+| **Tooling** | [`just`](https://github.com/casey/just) task runner, Gradle |
 
-### For Production
-- **Linux VPS** (Ubuntu/Debian recommended)
-- **DNS domain** pointed at the server
-- **Ports 80/443** publicly accessible
-- **2GB RAM** minimum recommended
+## 📋 Requirements
 
-## 🛠️ Quick Installation
+**Development**
+- Docker with Docker Compose v2
+- [`just`](https://github.com/casey/just) ≥ 1.52
+- Android SDK 36 + JDK 17 (for building the app; the backend builds inside Docker)
 
-### 1. Clone and Initial Setup
+**Production**
+- A Linux VPS with a domain pointed at it and ports 80/443 reachable
+- 2 GB RAM recommended
+
+## ⚡ Quick start
+
+### 1. Clone & configure
 
 ```bash
 git clone <REPOSITORY_URL>
 cd StepsTracker
-just init
+just setup          # creates .env, checks tools, validates the compose file
 ```
 
-### 2. Environment Configuration
-
-Edit `.env` with secure passwords and a `JWT_SECRET` of at least 32 characters:
+Edit `.env` and set strong secrets before anything else:
 
 ```env
-DB_PASSWORD=your_secure_password_here
-JWT_SECRET=your_very_long_secret_key_minimum_32_chars
+POSTGRES_PASSWORD=change-me
+JWT_SECRET=at-least-32-random-characters
 DOMAIN=steps.example.com
+API_PORT=8088
 ```
 
-### 3. Start the Development Backend
+### 2. Start the backend + database
 
 ```bash
-just dev
-just health
+just run            # docker compose up (API + PostgreSQL), waits until healthy
+just stack api-health
 ```
 
-The local API will be available at `http://localhost:8080`
+### 3. Build & install the Android app
 
-### 4. Build and Install the Android App
-
-Configure the API URL in `android/gradle.properties`:
-
-```properties
-API_BASE_URL=https://steps.example.com/
-```
-
-Then build the app:
+Install a debug build pointed at this computer's LAN API (IP auto-detected):
 
 ```bash
-just android-build
-# or open android/ in Android Studio
+just mobile install-lan
 ```
 
-## 🌐 Production Deployment
+Or build the APK / open `android/` in Android Studio:
 
-### VPS Setup
+```bash
+just mobile build   # android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+Then launch the app, keep the pre-filled server URL (or set your own) and sign in with
+the [demo account](#-demo-account).
+
+## 🌐 Production deployment
 
 ```bash
 # On your VPS
-git clone <REPOSITORY_URL>
-cd StepsTracker
-just init
+git clone <REPOSITORY_URL> && cd StepsTracker
+just setup
+nano .env                 # real domain + secrets, API_HOST=127.0.0.1 behind Caddy
 
-# Configure .env with the real domain
-nano .env
-
-# Start production services
-just prod-up
-just prod-status
+just stack prod-up        # Caddy + API + PostgreSQL with automatic TLS
+just stack prod-status
 ```
 
-Caddy will automatically obtain TLS certificates from Let's Encrypt.
+Caddy obtains and renews Let's Encrypt certificates automatically.
 
-### Updates
+**Updating**
 
 ```bash
-just backup              # ALWAYS back up first!
+just db backup            # always back up first
 git pull --ff-only
-just prod-up
+just stack prod-up
 ```
 
 ## 🧪 Testing
 
 ```bash
-just test                # All tests
-just backend-test        # Backend only
-just android-test        # Android only
-just compose-validate    # Validate Docker configuration
+just tests all            # backend + Android
+just tests backend        # backend JVM tests (Gradle container)
+just tests android        # Android JVM unit tests
+just check                # config + tooling + compose validation
+just ci                   # check + full test suite
 ```
 
-## 📁 Repository Structure
+## 🛠️ Task runner
 
-```
-StepsTracker/
-├── android/            # Native Android app (Kotlin/Compose)
-│   ├── app/           # Application code
-│   └── gradle/        # Build configuration
-├── backend/           # REST API (Kotlin/Ktor)
-│   ├── src/          # Source code
-│   └── migrations/   # Flyway database migrations
-├── docs/             # Detailed documentation
-│   ├── architecture.md
-│   ├── deployment.md
-│   ├── backup.md
-│   ├── privacy.md
-│   ├── openapi.yaml
-│   └── screenshots/  # App screenshots (to be added)
-├── infra/           # Infrastructure configuration
-│   ├── compose.yaml # Docker Compose
-│   └── Caddyfile    # Reverse proxy config
-├── justfile         # Automation commands
-├── .env.example     # Configuration template
-└── LICENSE          # MIT License
-```
-
-## 🔧 Useful Commands
+Commands are organized into modules — run `just` (or `just --list`) to see them all.
 
 | Command | Description |
 |---------|-------------|
-| `just` | Show all available commands |
-| `just dev` | Start the backend in development mode |
-| `just dev-down` | Stop development services |
-| `just logs` | Show real-time logs |
-| `just backup` | Create a database backup |
-| `just restore <file>` | Restore a backup |
-| `just android-install-lan` | Install the app for LAN testing |
-| `just prod-up` | Production deployment |
-| `just prod-status` | Production services status |
+| `just run` | Start the local stack (API + PostgreSQL) |
+| `just stack lan-up` | Start the stack bound to the LAN for phone testing |
+| `just stack down` | Stop the stack (database volume preserved) |
+| `just stack logs [SVC]` | Follow logs (optionally for one service) |
+| `just mobile install-lan` | Install a debug APK pointed at the LAN API |
+| `just mobile test` | Run Android unit tests |
+| `just db backup` / `just db restore FILE` | Back up / restore PostgreSQL |
+| `just db reset` | Drop containers and the data volume (destructive) |
+| `just stack prod-up` / `just stack prod-down` | Production stack (Caddy + HTTPS) |
+| `just doctor` | Full environment diagnostics |
 
-## 🔒 Security and Privacy
+## 📁 Repository structure
 
-### Best Practices
-- **Never commit** `.env`, database dumps, or credentials
-- **Always use HTTPS** in production
-- **Encrypted backups** stored off the VPS
-- **Regular restore tests**
-- **Frequent dependency updates**
+```
+StepsTracker/
+├── android/            # Android app (Kotlin / Compose)
+│   └── app/src/        # UI, tracking (steps + runs), data, widget
+├── backend/            # REST API (Kotlin / Ktor)
+│   └── src/main/       # routes, repositories, Flyway migrations (V1–V4)
+├── infra/              # Docker Compose + Caddyfile
+├── docs/               # Documentation & screenshots
+├── .just/              # just task runner (modules, scripts, manifests)
+├── Justfile            # Task-runner entry point
+├── .env.example        # Configuration template
+└── LICENSE             # MIT
+```
 
-### Vulnerability Reporting
-To report vulnerabilities, **do not open public issues**. Contact the repository maintainer privately.
+## 🔒 Security & privacy
+
+- **Never commit** `.env`, database dumps or credentials — they are git-ignored by default.
+- **Always use HTTPS** in production (Caddy handles it) and keep `API_HOST=127.0.0.1` behind it.
+- **Back up** regularly with `just db backup` and store dumps off the VPS.
+- **Report vulnerabilities privately** — do not open public issues for security matters.
 
 See [docs/privacy.md](docs/privacy.md) for full details on data handling.
 
 ## 🤝 Contributing
 
-Contributions are welcome! Before proposing changes:
+Contributions are welcome. Before opening a pull request:
 
-1. **Keep separation**: Android logic, sync, and server must stay modular
-2. **Add tests**: every change must have appropriate tests
-3. **Validate everything**: run `just test` and `just compose-validate`
-4. **Privacy first**: never include real health data in fixtures or logs
-
-### Development Workflow
+1. **Keep concerns modular** — Android, sync and server stay independent.
+2. **Add tests** for every change and run `just ci`.
+3. **Privacy first** — never include real health data in fixtures, tests or logs.
 
 ```bash
-# 1. Fork and clone
-git clone https://github.com/YOUR_USERNAME/StepsTracker
-cd StepsTracker
-
-# 2. Create a feature branch
 git checkout -b feature/amazing-feature
-
-# 3. Develop and test
-just dev
-just test
-
-# 4. Commit and push
-git add .
-git commit -m "Add amazing feature"
-git push origin feature/amazing-feature
-
-# 5. Open a Pull Request
+just run && just ci
+git commit -m "Add amazing feature" && git push origin feature/amazing-feature
 ```
 
 ## 📄 License
 
-Distributed under the [MIT License](LICENSE). See `LICENSE` for more information.
+Distributed under the [MIT License](LICENSE).
 
-## 🙏 Acknowledgments
-
-- Health Connect for the fitness data API
-- Ktor for the excellent backend framework
-- Jetpack Compose for the modern UI
-- The open source community for continued support
-
----
-
-<p align="center">
-  Made with ❤️ for privacy and control over your own data
-</p>
+<div align="center">
+  <sub>Built for privacy and control over your own health data.</sub>
+</div>
