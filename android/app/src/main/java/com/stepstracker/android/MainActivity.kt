@@ -1,13 +1,22 @@
 package com.stepstracker.android
 
 import android.Manifest
+import android.graphics.RenderEffect
+import android.graphics.RuntimeShader
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.annotation.RequiresApi
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -29,11 +38,22 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asComposeRenderEffect
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -48,6 +68,7 @@ import com.stepstracker.android.data.*
 import com.stepstracker.android.tracking.StepTrackingManager
 import com.stepstracker.android.tracking.TrackingSource
 import com.stepstracker.android.widget.StepWidgetProvider
+import com.stepstracker.android.ui.run.RunsRoot
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeChild
 import dev.chrisbanes.haze.hazeSource
@@ -102,12 +123,12 @@ class AppViewModel(private val app:StepsTrackerApp):ViewModel() {
     fun deleteWeight(effectiveAt:String)=launch { app.api.deleteWeight(effectiveAt);refresh() }
     // Edit a weigh-in's value (wrong entry); the backend repairs calories for the affected range.
     fun editWeight(effectiveAt:String,weightKg:Double)=launch { app.api.updateWeight(effectiveAt,weightKg);refresh() }
-    fun logout()=launch { app.api.logout();app.cache.clear();mutable.value=UiState(serverUrl=app.server.baseUrl,trackingSource=app.trackingSettings.preference) }
-    fun delete()=launch { app.api.deleteAccount();app.database.intervals().clear();app.cache.clear();mutable.value=UiState(serverUrl=app.server.baseUrl,trackingSource=app.trackingSettings.preference) }
+    fun logout()=launch { check(app.database.runs().active()==null){"Finish the active run before logging out"};app.api.logout();app.cache.clear();mutable.value=UiState(serverUrl=app.server.baseUrl,trackingSource=app.trackingSettings.preference) }
+    fun delete()=launch { check(app.database.runs().active()==null){"Finish the active run before deleting the account"};app.api.deleteAccount();app.database.intervals().clear();app.database.runs().clear();app.cache.clear();mutable.value=UiState(serverUrl=app.server.baseUrl,trackingSource=app.trackingSettings.preference) }
     fun changeServer(value:String)=launch { switchServer(value);mutable.value=UiState(serverUrl=app.server.baseUrl,trackingSource=app.trackingSettings.preference) }
     fun setTrackingSource(value:TrackingPreference){app.trackingSettings.preference=value;mutable.update { it.copy(trackingSource=value) }}
     fun statsRange(days:Int?){mutable.update { it.copy(statsRange=days) }}
-    private suspend fun switchServer(value:String) { if(app.server.save(value)){app.session.clear();app.cache.clear();app.database.intervals().clear()} }
+    private suspend fun switchServer(value:String) { check(app.database.runs().active()==null){"Finish the active run before changing server"};if(app.server.save(value)){app.session.clear();app.cache.clear();app.database.intervals().clear();app.database.runs().clear()} }
     fun tab(value:Int){mutable.update { it.copy(tab=value) }}
     fun shiftDay(days:Long)=mutable.update { st->val today=LocalDate.now();val target=st.selectedDate.plusDays(days);if(target.isAfter(today)||target.isBefore(st.rangeStart))st else st.copy(selectedDate=target) }
     fun selectDate(date:LocalDate)=mutable.update { st->val today=LocalDate.now();if(date.isAfter(today)||date.isBefore(st.rangeStart))st else st.copy(selectedDate=date) }
@@ -179,26 +200,204 @@ class AppViewModel(private val app:StepsTrackerApp):ViewModel() {
     } }
     var showWeight by remember{mutableStateOf(false)}
     val haze=remember{HazeState()}
+    // Silicone liquid-glass nav is the definitive menu; it needs AGSL (RuntimeShader) → Android 13+.
+    // Older devices fall back to the plain Haze pill.
+    val liquid=Build.VERSION.SDK_INT>=Build.VERSION_CODES.TIRAMISU
+    val backdrop=rememberGraphicsLayer()
+    // Faint grid painted into the captured backdrop so the liquid-glass refraction (raised rim + selected depression)
+    // always has lines to bend — otherwise on empty/uniform areas there is nothing to deform and the dimple vanishes.
+    val density=LocalDensity.current
+    val gridColor=MaterialTheme.colorScheme.onSurface.copy(alpha=0.06f)
+    val gridStepPx=with(density){38.dp.toPx()};val gridStrokePx=with(density){1.dp.toPx()}
     Box(Modifier.fillMaxSize()) {
-        Box(Modifier.fillMaxSize().hazeSource(haze)) { when(state.tab) { 0->Home(state,tracking,model);1->Stats(state,model::statsRange);else->ProfileScreen(state,model,onSourceChange) } }
-        FloatingActionButton({showWeight=true},Modifier.align(Alignment.BottomEnd).padding(end=20.dp,bottom=104.dp),containerColor=MaterialTheme.colorScheme.primary,contentColor=MaterialTheme.colorScheme.onPrimary) { Icon(Icons.Default.MonitorWeight,"Log weight") }
-        GlassPillNav(state.tab,model::tab,haze,Modifier.align(Alignment.BottomCenter).padding(bottom=24.dp))
+        Box(Modifier.fillMaxSize().hazeSource(haze).then(if(liquid)Modifier.drawWithContent { backdrop.record { var gx=0f;while(gx<=size.width){drawLine(gridColor,Offset(gx,0f),Offset(gx,size.height),gridStrokePx);gx+=gridStepPx};var gy=0f;while(gy<=size.height){drawLine(gridColor,Offset(0f,gy),Offset(size.width,gy),gridStrokePx);gy+=gridStepPx};this@drawWithContent.drawContent() };drawLayer(backdrop) } else Modifier)) { when(state.tab) { 0->Home(state,tracking,model);1->Stats(state,model::statsRange);2->RunsRoot();else->ProfileScreen(state,model,onSourceChange) } }
+        // Nav is drawn before the FAB so the liquid-glass effect region (a rectangle) never covers the FAB.
+        if(liquid)LiquidGlassPillNav(state.tab,model::tab,backdrop,Modifier.align(Alignment.BottomCenter).padding(bottom=6.dp))
+        else GlassPillNav(state.tab,model::tab,haze,Modifier.align(Alignment.BottomCenter).padding(bottom=24.dp))
+        if(state.tab!=2){if(liquid)LiquidGlassFab({showWeight=true},backdrop,Modifier.align(Alignment.BottomEnd).padding(end=6.dp,bottom=90.dp))
+        else FloatingActionButton({showWeight=true},Modifier.align(Alignment.BottomEnd).padding(end=20.dp,bottom=104.dp),containerColor=MaterialTheme.colorScheme.primary,contentColor=MaterialTheme.colorScheme.onPrimary) { Icon(Icons.Default.MonitorWeight,"Log weight") }}
     }
     if(showWeight)state.me?.profile?.let { LogWeightDialog(it.weightKg,{showWeight=false}) { w->model.logWeight(w);showWeight=false } }
 }
 
 // Floating pill navigation with a real backdrop blur (Haze) over the scrolling content behind it.
 @Composable private fun GlassPillNav(selected:Int,onSelect:(Int)->Unit,haze:HazeState,modifier:Modifier=Modifier) {
-    val items=listOf(Icons.Default.Home to "Today",Icons.Default.BarChart to "Stats",Icons.Default.Person to "Profile")
+    val items=listOf(Icons.Default.Home to "Today",Icons.Default.BarChart to "Stats",Icons.Default.DirectionsRun to "Runs",Icons.Default.Person to "Profile")
     val bg=MaterialTheme.colorScheme.background
     Surface(modifier.clip(RoundedCornerShape(32.dp)).hazeChild(haze){ backgroundColor=bg;blurRadius=24.dp },shape=RoundedCornerShape(32.dp),color=MaterialTheme.colorScheme.surface.copy(alpha=0.45f),border=BorderStroke(1.dp,MaterialTheme.colorScheme.onSurface.copy(alpha=0.14f))) {
-        Row(Modifier.padding(horizontal=10.dp,vertical=8.dp),horizontalArrangement=Arrangement.spacedBy(2.dp)) {
+        Row(Modifier.padding(horizontal=10.dp,vertical=6.dp),horizontalArrangement=Arrangement.spacedBy(2.dp)) {
             items.forEachIndexed { i,(icon,label)->
                 val tint=if(selected==i)MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                Column(Modifier.clip(RoundedCornerShape(22.dp)).clickable{onSelect(i)}.padding(horizontal=18.dp,vertical=8.dp),horizontalAlignment=Alignment.CenterHorizontally) {
+                Column(Modifier.clip(RoundedCornerShape(22.dp)).clickable{onSelect(i)}.padding(horizontal=18.dp,vertical=4.dp),horizontalAlignment=Alignment.CenterHorizontally) {
                     Icon(icon,label,tint=tint);Text(label,style=MaterialTheme.typography.labelSmall,color=tint)
                 }
             }
+        }
+    }
+}
+
+// Experimental "deformed screen" nav: an AGSL shader stretches the backdrop in a band straddling the pill edge —
+// the deformation extends BEYOND the box (the surrounding screen looks pulled), with an outer shadow + inner rim
+// light for relief, and the pill interior blurs toward the centre for legibility. Requires Android 13+ (RuntimeShader).
+// The effect region is larger than the visible pill (padded by a margin) so the stretch shows all around it.
+private const val LIQUID_GLASS_AGSL="""
+uniform shader content;
+uniform float2 uSize;    // effect region size (pill + margin)
+uniform float2 uCenter;  // pill centre within the region
+uniform float2 uHalf;    // pill half-extents
+uniform float uCorner; uniform float uBand; uniform float uRefract; uniform float uCenterBlur; uniform float uShadow; uniform float uRim;
+uniform float2 uSelCenter; uniform float2 uSelHalf; uniform float uSelCorner; uniform float uSelWall; uniform float uSelDepth; uniform float uSelShade;
+float sdRoundRect(float2 p, float2 b, float r){ r=min(r,min(b.x,b.y)); float2 q=abs(p)-b+r; return min(max(q.x,q.y),0.0)+length(max(q,0.0))-r; }
+half4 main(float2 coord){
+  float2 p=coord-uCenter;
+  float d=sdRoundRect(p,uHalf,uCorner);          // <0 inside pill, >0 outside
+  float e=1.0;
+  float dx=sdRoundRect(p+float2(e,0.0),uHalf,uCorner)-sdRoundRect(p-float2(e,0.0),uHalf,uCorner);
+  float dy=sdRoundRect(p+float2(0.0,e),uHalf,uCorner)-sdRoundRect(p-float2(0.0,e),uHalf,uCorner);
+  float2 n=normalize(float2(dx,dy)+float2(1e-5,1e-5)); // outward normal
+  // Raised shoulder — same localized structure as the depression (just inverted), refined not oversized.
+  float pw=exp(-(d/uBand)*(d/uBand));          // hump straddling the wall
+  float2 s=coord - n*pw*uRefract;              // raised: gently push the backdrop outward at the wall
+  // Selected-tab RECTANGULAR depression, centred on the active item's icon: sinks the surface inward.
+  float2 sp=coord-uSelCenter;
+  float sd=sdRoundRect(sp,uSelHalf,uSelCorner);        // <0 inside dimple, >0 outside
+  float e2=1.0;
+  float sdx=sdRoundRect(sp+float2(e2,0.0),uSelHalf,uSelCorner)-sdRoundRect(sp-float2(e2,0.0),uSelHalf,uSelCorner);
+  float sdy=sdRoundRect(sp+float2(0.0,e2),uSelHalf,uSelCorner)-sdRoundRect(sp-float2(0.0,e2),uSelHalf,uSelCorner);
+  float2 sn=normalize(float2(sdx,sdy)+float2(1e-5,1e-5));
+  float sWall=exp(-(sd/uSelWall)*(sd/uSelWall));       // hump straddling the dimple wall
+  float sInside=smoothstep(1.0,-1.0,sd);               // 1 inside the dimple, 0 outside
+  s += sn*sWall*uSelDepth;                             // concave sink of the backdrop at the wall
+  float rad=clamp(-d/min(uHalf.x,uHalf.y),0.0,1.0);
+  rad=rad*rad;                                    // progressive: crisp near the rim, much blurrier toward the centre
+  float rpx=rad*uCenterBlur;
+  half4 col=content.eval(s);
+  if(rpx>0.1){ col+=content.eval(s+float2(rpx,0.0)); col+=content.eval(s+float2(-rpx,0.0));
+                col+=content.eval(s+float2(0.0,rpx)); col+=content.eval(s+float2(0.0,-rpx)); col*=0.2; }
+  // Raised relief mirrors the depression (inverted): top face lit, bottom shadowed, subtle bright lip on top.
+  col.rgb=clamp(col.rgb*(1.0 - n.y*pw*uShadow) + max(-n.y,0.0)*pw*uRim,0.0,1.0);
+  // dimple relief: lit from the top => top-inner in shadow, bottom-inner bright (inverted vs the raised rim), plus a
+  // slight overall darken so the selected tab reads as pressed INTO the surface.
+  // Always applied (independent of the backdrop, so the shadow shows even over an empty background):
+  // top-inner wall in shadow, bottom-inner lit, darker pit, bright outer lip => clearly pressed IN.
+  float sLip=smoothstep(uSelWall,0.0,sd)*step(0.0,sd);  // bright lip just outside the wall
+  col.rgb=clamp(col.rgb*(1.0 + sn.y*sWall*uSelShade)*(1.0 - sInside*0.32) + sLip*0.18,0.0,1.0);
+  return col;
+}
+"""
+
+@RequiresApi(Build.VERSION_CODES.TIRAMISU)
+@Composable private fun LiquidGlassPillNav(selected:Int,onSelect:(Int)->Unit,backdrop:androidx.compose.ui.graphics.layer.GraphicsLayer,modifier:Modifier=Modifier) {
+    val items=listOf(Icons.Default.Home to "Today",Icons.Default.BarChart to "Stats",Icons.Default.DirectionsRun to "Runs",Icons.Default.Person to "Profile")
+    val density=LocalDensity.current
+    // Effect region extends beyond the pill so the stretch/shadow shows around it (less at the bottom = screen edge).
+    val marginX=30.dp;val marginTop=30.dp;val marginBottom=14.dp
+    val mxPx=with(density){marginX.toPx()};val mtPx=with(density){marginTop.toPx()};val mbPx=with(density){marginBottom.toPx()}
+    // Rounded-RECTANGLE pill (right-angle sides, rounded corners), matching the rectangular depression.
+    val corner=26.dp
+    val cornerPx=with(density){corner.toPx()};val bandPx=with(density){16.dp.toPx()};val refractPx=with(density){28.dp.toPx()};val centerBlurPx=with(density){8.dp.toPx()};val shadow=0.45f;val rim=0.16f
+    val selDepthPx=with(density){36.dp.toPx()};val selShade=0.95f;val selCornerPx=with(density){12.dp.toPx()};val selWallPx=with(density){8.dp.toPx()}
+    val shader=remember{RuntimeShader(LIQUID_GLASS_AGSL)}
+    var topLeft by remember{mutableStateOf(Offset.Zero)}
+    // Measured centre X of each tab item (region-local), so the depression sits on the icon regardless of label width.
+    var regionWin by remember{mutableStateOf(Offset.Zero)}
+    val itemCx=remember{mutableStateListOf(0f,0f,0f,0f)}
+    // Draggable + animated depression: dipX animates between tabs; dragX overrides it while the user drags.
+    val scope=rememberCoroutineScope()
+    val dipX=remember{Animatable(0f)}
+    var dragX by remember{mutableStateOf<Float?>(null)}
+    LaunchedEffect(selected,itemCx.getOrElse(selected){0f}) {
+        val target=itemCx.getOrElse(selected){0f}
+        if(dragX==null&&target>0f){ if(dipX.value==0f)dipX.snapTo(target) else dipX.animateTo(target,tween(300)) }
+    }
+    // Keep the distorted slice fresh while content scrolls / tab changes.
+    var tick by remember{mutableStateOf(0)}
+    LaunchedEffect(Unit){ while(true){ withFrameNanos {};tick++ } }
+    Box(modifier.onGloballyPositioned { topLeft=it.positionInParent();regionWin=it.positionInWindow() }
+        .pointerInput(Unit){ detectHorizontalDragGestures(
+            onDragStart={ off->dragX=off.x },
+            onDragEnd={ val cur=dragX ?: dipX.value;val near=(0..3).minByOrNull { kotlin.math.abs(itemCx.getOrElse(it){0f}-cur) } ?: selected;dragX=null;onSelect(near);scope.launch { dipX.snapTo(cur);dipX.animateTo(itemCx.getOrElse(near){cur},tween(220)) } },
+            onDragCancel={ dragX=null }
+        ){ change,_-> val lo=itemCx.minOrNull() ?: 0f;val hi=itemCx.maxOrNull() ?: size.width.toFloat();dragX=change.position.x.coerceIn(lo,hi) } }) {
+        // Layer A: backdrop slice for the whole region (NOT clipped to the pill) so the deformation shows all around.
+        Box(Modifier.matchParentSize().graphicsLayer {
+            val w=size.width;val h=size.height
+            if(w>0f&&h>0f){
+                val halfX=w/2f-mxPx;val halfY=(h-mtPx-mbPx)/2f;val cy=mtPx+halfY
+                shader.setFloatUniform("uSize",w,h);shader.setFloatUniform("uCenter",w/2f,cy);shader.setFloatUniform("uHalf",halfX,halfY)
+                shader.setFloatUniform("uCorner",cornerPx);shader.setFloatUniform("uBand",bandPx);shader.setFloatUniform("uRefract",refractPx);shader.setFloatUniform("uCenterBlur",centerBlurPx);shader.setFloatUniform("uShadow",shadow);shader.setFloatUniform("uRim",rim)
+                val slotW=(2f*halfX)/4f
+                val measured=itemCx.getOrElse(selected){0f}
+                // Depression follows the drag, otherwise the animated position between tabs.
+                val selX=dragX ?: dipX.value.let { if(it>0f)it else if(measured>0f)measured else (w/2f-halfX)+(selected+0.5f)*slotW }
+                val selHalfX=slotW*0.5f*0.86f;val selHalfY=halfY*0.82f
+                shader.setFloatUniform("uSelCenter",selX,cy);shader.setFloatUniform("uSelHalf",selHalfX,selHalfY);shader.setFloatUniform("uSelCorner",selCornerPx);shader.setFloatUniform("uSelWall",selWallPx);shader.setFloatUniform("uSelDepth",selDepthPx);shader.setFloatUniform("uSelShade",selShade)
+                renderEffect=RenderEffect.createRuntimeShaderEffect(shader,"content").asComposeRenderEffect()
+            }
+        }.drawWithContent { tick;translate(-topLeft.x,-topLeft.y){ drawLayer(backdrop) } })
+        // Chrome (rim + menu), inset to the pill rect and undistorted so the text stays crisp.
+        Box(Modifier.padding(start=marginX,end=marginX,top=marginTop,bottom=marginBottom)) {
+            Surface(Modifier.matchParentSize().shadow(18.dp,RoundedCornerShape(corner),clip=false),shape=RoundedCornerShape(corner),color=MaterialTheme.colorScheme.surface.copy(alpha=0.22f)) {}
+            Row(Modifier.padding(horizontal=10.dp,vertical=6.dp),horizontalArrangement=Arrangement.spacedBy(2.dp)) {
+                items.forEachIndexed { i,(icon,label)->
+                    val tint=if(selected==i)MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    Column(Modifier.clip(RoundedCornerShape(22.dp)).clickable{onSelect(i)}.onGloballyPositioned { c->itemCx[i]=c.positionInWindow().x+c.size.width/2f-regionWin.x }.padding(horizontal=18.dp,vertical=4.dp),horizontalAlignment=Alignment.CenterHorizontally) {
+                        Icon(icon,label,tint=tint);Text(label,style=MaterialTheme.typography.labelSmall,color=tint)
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Silicone FAB: protrudes like the nav's raised shape, and dips into a depression while pressed (uPress 0->1),
+// returning to raised on release. Same structure/lighting as the nav, morphed by uPress.
+private const val FAB_AGSL="""
+uniform shader content; uniform float2 uSize; uniform float2 uHalf; uniform float uCorner; uniform float uWall; uniform float uDepth; uniform float uShade; uniform float uRim; uniform float uPress;
+float sdRoundRect(float2 p, float2 b, float r){ r=min(r,min(b.x,b.y)); float2 q=abs(p)-b+r; return min(max(q.x,q.y),0.0)+length(max(q,0.0))-r; }
+half4 main(float2 coord){
+  float2 p=coord-uSize*0.5;
+  float d=sdRoundRect(p,uHalf,uCorner);
+  float e=1.0;
+  float dx=sdRoundRect(p+float2(e,0.0),uHalf,uCorner)-sdRoundRect(p-float2(e,0.0),uHalf,uCorner);
+  float dy=sdRoundRect(p+float2(0.0,e),uHalf,uCorner)-sdRoundRect(p-float2(0.0,e),uHalf,uCorner);
+  float2 n=normalize(float2(dx,dy)+float2(1e-5,1e-5));
+  float w=exp(-(d/uWall)*(d/uWall));
+  float inside=smoothstep(1.0,-1.0,d);
+  float sgn=mix(-1.0,1.0,uPress);            // raised(-1) <-> pressed/depressed(+1)
+  float2 s=coord + n*w*uDepth*sgn;
+  half4 col=content.eval(s);
+  float lip=smoothstep(uWall,0.0,d)*step(0.0,d);
+  col.rgb=clamp(col.rgb*(1.0 + sgn*n.y*w*uShade)*(1.0 - inside*0.28*uPress) + max(-n.y,0.0)*w*uRim*(1.0-uPress) + lip*0.16*uPress, 0.0,1.0);
+  return col;
+}
+"""
+
+@RequiresApi(Build.VERSION_CODES.TIRAMISU)
+@Composable private fun LiquidGlassFab(onClick:()->Unit,backdrop:androidx.compose.ui.graphics.layer.GraphicsLayer,modifier:Modifier=Modifier) {
+    val density=LocalDensity.current
+    val fabSize=60.dp;val margin=16.dp
+    val marginPx=with(density){margin.toPx()}
+    val cornerPx=with(density){18.dp.toPx()};val wallPx=with(density){10.dp.toPx()};val depthPx=with(density){13.dp.toPx()};val shade=0.5f;val rim=0.16f
+    val shader=remember{RuntimeShader(FAB_AGSL)}
+    var topLeft by remember{mutableStateOf(Offset.Zero)}
+    var tick by remember{mutableStateOf(0)}
+    LaunchedEffect(Unit){ while(true){ withFrameNanos {};tick++ } }
+    val interaction=remember{MutableInteractionSource()}
+    val pressed by interaction.collectIsPressedAsState()
+    val press by animateFloatAsState(if(pressed)1f else 0f,tween(140),label="fabPress")
+    Box(modifier.size(fabSize+margin*2).onGloballyPositioned { topLeft=it.positionInParent() }.clickable(interaction,null){ onClick() }) {
+        Box(Modifier.matchParentSize().graphicsLayer {
+            val w=size.width;val h=size.height
+            if(w>0f&&h>0f){
+                shader.setFloatUniform("uSize",w,h);shader.setFloatUniform("uHalf",w/2f-marginPx,h/2f-marginPx)
+                shader.setFloatUniform("uCorner",cornerPx);shader.setFloatUniform("uWall",wallPx);shader.setFloatUniform("uDepth",depthPx);shader.setFloatUniform("uShade",shade);shader.setFloatUniform("uRim",rim);shader.setFloatUniform("uPress",press)
+                renderEffect=RenderEffect.createRuntimeShaderEffect(shader,"content").asComposeRenderEffect()
+            }
+        }.drawWithContent { tick;translate(-topLeft.x,-topLeft.y){ drawLayer(backdrop) } })
+        Box(Modifier.matchParentSize().padding(margin)) {
+            Surface(Modifier.matchParentSize().shadow((if(pressed)3 else 12).dp,RoundedCornerShape(18.dp),clip=false),shape=RoundedCornerShape(18.dp),color=Color(0xFF00D46A).copy(alpha=0.72f)) {}
+            Box(Modifier.matchParentSize(),contentAlignment=Alignment.Center) { Icon(Icons.Default.MonitorWeight,"Log weight",tint=MaterialTheme.colorScheme.onPrimary) }
         }
     }
 }

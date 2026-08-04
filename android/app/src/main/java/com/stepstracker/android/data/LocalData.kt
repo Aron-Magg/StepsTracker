@@ -5,6 +5,7 @@ import androidx.room.*
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
+import com.stepstracker.android.data.run.*
 
 @Entity(tableName = "step_intervals", indices = [Index(value=["intervalStart"], unique=true)])
 data class StepIntervalEntity(
@@ -54,9 +55,10 @@ interface StepIntervalDao {
     suspend fun clear()
 }
 
-@Database(entities=[StepIntervalEntity::class], version=2, exportSchema=false)
+@Database(entities=[StepIntervalEntity::class,RunSessionEntity::class,RunPointEntity::class,RunPauseEntity::class], version=3, exportSchema=false)
 abstract class StepsDatabase : RoomDatabase() {
     abstract fun intervals(): StepIntervalDao
+    abstract fun runs():RunDao
     companion object {
         private val MIGRATION_1_2=object:Migration(1,2) {
             override fun migrate(db:SupportSQLiteDatabase) {
@@ -65,6 +67,13 @@ abstract class StepsDatabase : RoomDatabase() {
                 db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_step_intervals_intervalStart ON step_intervals(intervalStart)")
             }
         }
-        fun create(context: Context) = Room.databaseBuilder(context, StepsDatabase::class.java, "steps.db").addMigrations(MIGRATION_1_2).build()
+        private val MIGRATION_2_3=object:Migration(2,3) { override fun migrate(db:SupportSQLiteDatabase) {
+            db.execSQL("CREATE TABLE IF NOT EXISTS run_sessions (id TEXT NOT NULL PRIMARY KEY,deviceId TEXT NOT NULL,status TEXT NOT NULL,startedAt INTEGER NOT NULL,endedAt INTEGER,activeDurationMillis INTEGER NOT NULL,distanceMeters REAL NOT NULL,averageSpeedMps REAL NOT NULL,averagePaceSecondsPerKm REAL,caloriesKcal REAL NOT NULL,syncedPointSequence INTEGER NOT NULL,serverCreated INTEGER NOT NULL,serverSynced INTEGER NOT NULL,createdAt INTEGER NOT NULL,updatedAt INTEGER NOT NULL)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_run_sessions_status ON run_sessions(status)");db.execSQL("CREATE INDEX IF NOT EXISTS index_run_sessions_startedAt ON run_sessions(startedAt)")
+            db.execSQL("CREATE TABLE IF NOT EXISTS run_points (sessionId TEXT NOT NULL,sequence INTEGER NOT NULL,recordedAt INTEGER NOT NULL,latitude REAL NOT NULL,longitude REAL NOT NULL,altitudeMeters REAL,accuracyMeters REAL NOT NULL,speedMps REAL,bearingDegrees REAL,distanceFromPreviousMeters REAL NOT NULL,synced INTEGER NOT NULL,PRIMARY KEY(sessionId,sequence),FOREIGN KEY(sessionId) REFERENCES run_sessions(id) ON UPDATE NO ACTION ON DELETE CASCADE)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_run_points_sessionId ON run_points(sessionId)")
+            db.execSQL("CREATE TABLE IF NOT EXISTS run_pauses (id TEXT NOT NULL PRIMARY KEY,sessionId TEXT NOT NULL,pausedAt INTEGER NOT NULL,resumedAt INTEGER,FOREIGN KEY(sessionId) REFERENCES run_sessions(id) ON UPDATE NO ACTION ON DELETE CASCADE)");db.execSQL("CREATE INDEX IF NOT EXISTS index_run_pauses_sessionId ON run_pauses(sessionId)")
+        } }
+        fun create(context: Context) = Room.databaseBuilder(context, StepsDatabase::class.java, "steps.db").addMigrations(MIGRATION_1_2,MIGRATION_2_3).build()
     }
 }

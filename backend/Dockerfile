@@ -6,7 +6,8 @@ RUN gradle installDist --no-daemon
 
 FROM eclipse-temurin:17-jre-jammy
 RUN groupadd --system app && useradd --system --gid app --home /app app \
-    && apt-get update && apt-get install -y --no-install-recommends curl \
+    && apt-get -o Acquire::ForceIPv4=true -o Acquire::Retries=3 update \
+    && apt-get -o Acquire::ForceIPv4=true -o Acquire::Retries=3 install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=build /src/build/install/stepstracker-backend/ ./

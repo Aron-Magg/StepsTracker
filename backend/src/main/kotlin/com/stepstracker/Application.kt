@@ -32,6 +32,7 @@ fun Application.module(config: AppConfig = AppConfig()) {
     val database = Database(config)
     val security = Security(config)
     val repository = Repository(database, security, config)
+    val runs = RunRepository(database)
     if(config.seedDemoUser) repository.seedDemoUser()
     val logger = log
     environment.monitor.subscribe(ApplicationStopped) { database.close() }
@@ -108,6 +109,16 @@ fun Application.module(config: AppConfig = AppConfig()) {
                         val to=Instant.parse(call.request.queryParameters["to"] ?: throw IllegalArgumentException("to is required"))
                         require(to.isAfter(from)); require(to.epochSecond-from.epochSecond <= 366L*86400)
                         call.respond(repository.steps(call.userId(),from,to))
+                    }
+                }
+                route("/runs") {
+                    post { call.respond(HttpStatusCode.Created,runs.create(call.userId(),call.receive())) }
+                    get { val from=call.request.queryParameters["from"]?.let(LocalDate::parse);val to=call.request.queryParameters["to"]?.let(LocalDate::parse);val limit=(call.request.queryParameters["limit"]?.toIntOrNull()?:50).coerceIn(1,100);val cursor=call.request.queryParameters["cursor"]?.let(Instant::parse);call.respond(runs.list(call.userId(),from,to,limit,cursor)) }
+                    route("/{id}") {
+                        get { runs.detail(call.userId(),UUID.fromString(call.parameters["id"])).let { if(it==null)call.respond(HttpStatusCode.NotFound,ErrorResponse("NOT_FOUND","Run not found")) else call.respond(it) } }
+                        put("/checkpoint") { call.respond(runs.checkpoint(call.userId(),UUID.fromString(call.parameters["id"]),call.receive())) }
+                        post("/complete") { call.respond(runs.complete(call.userId(),UUID.fromString(call.parameters["id"]),call.receive())) }
+                        delete { if(runs.delete(call.userId(),UUID.fromString(call.parameters["id"])))call.respond(HttpStatusCode.NoContent) else call.respond(HttpStatusCode.NotFound,ErrorResponse("NOT_FOUND","Run not found")) }
                     }
                 }
                 route("/stats") {
